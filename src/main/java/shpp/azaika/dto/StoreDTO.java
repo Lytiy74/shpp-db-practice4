@@ -28,4 +28,11 @@ public class StoreDTO {
     public void setAddress(String address) {
         this.address = address;
     }
+
+    @Override
+    public String toString() {
+        return "StoreDTO{" + "id=" + id +
+                ", address='" + address + '\'' +
+                '}';
+    }
 }
