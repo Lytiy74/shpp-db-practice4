@@ -41,7 +41,7 @@ public class ProductDAO implements Dao<ProductDTO> {
     @Override
     public List<ProductDTO> getAll() throws SQLException {
         log.info("Get all products");
-        String sql = "SELECT id, name, price FROM products";
+        String sql = "SELECT id, category_id, name, price FROM products";
         List<ProductDTO> productDTOS = new ArrayList<>();
         try(PreparedStatement ps = connection.prepareStatement(sql)) {
             try(ResultSet rs = ps.executeQuery()) {
