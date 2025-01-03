@@ -3,6 +3,7 @@ package shpp.azaika.util;
 import net.datafaker.Faker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import shpp.azaika.dto.CategoryDTO;
 import shpp.azaika.dto.StoreDTO;
 
 import java.util.Locale;
@@ -17,5 +18,9 @@ public class DTOFaker {
 
     public StoreDTO generateStore() {
         return new StoreDTO(faker.address().fullAddress());
+    }
+
+    public CategoryDTO generateCategory() {
+        return new CategoryDTO(faker.commerce().department());
     }
 }
