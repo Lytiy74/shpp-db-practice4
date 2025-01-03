@@ -38,7 +38,7 @@ public class StoreDAO implements Dao<StoreDTO> {
     @Override
     public List<StoreDTO> getAll() throws SQLException {
         log.info("Get all store dtos");
-        String sql = "SELECT id, address FROM store";
+        String sql = "SELECT id, address FROM stores";
         List<StoreDTO> storeDTOS = new ArrayList<>();
         try(Statement statement = connection.createStatement()){
             try (ResultSet resultSet = statement.executeQuery(sql)) {
