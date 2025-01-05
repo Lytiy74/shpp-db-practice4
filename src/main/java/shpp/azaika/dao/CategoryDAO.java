@@ -84,4 +84,20 @@ public class CategoryDAO implements Dao<CategoryDTO>{
             ps.executeUpdate();
         }
     }
+
+    public Optional<CategoryDTO> findByName(String name) throws SQLException {
+        log.info("Find category by name '{}'", name);
+        String sql = "SELECT id, name FROM categories WHERE name = ?";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, name);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    log.info("Category '{}' found", name);
+                    return Optional.of(new CategoryDTO(resultSet.getLong("id"), resultSet.getString("name")));
+                }
+            }
+        }
+        log.warn("Category '{}' not found", name);
+        return Optional.empty();
+    }
 }
