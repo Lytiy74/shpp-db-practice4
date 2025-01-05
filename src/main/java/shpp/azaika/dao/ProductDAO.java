@@ -87,4 +87,21 @@ public class ProductDAO implements Dao<ProductDTO> {
             ps.executeUpdate();
         }
     }
+
+    @Override
+    public Optional<ProductDTO> findByName(String name) throws SQLException {
+        log.info("Find product by name '{}'", name);
+        String sql = "SELECT id, name, category_id, price FROM products WHERE name = ?";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, name);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    log.info("Product '{}' found", name);
+                    return Optional.of(new ProductDTO(resultSet.getLong("id"), resultSet.getLong("category_id"),resultSet.getString("name"), resultSet.getDouble("price")));
+                }
+            }
+        }
+        log.warn("Product '{}' not found", name);
+        return Optional.empty();
+    }
 }
