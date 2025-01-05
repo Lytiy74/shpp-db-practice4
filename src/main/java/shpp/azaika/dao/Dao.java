@@ -14,4 +14,6 @@ public interface Dao<T> {
     void update(T t) throws SQLException;
 
     void delete(long id) throws SQLException;
+
+    Optional<T> findByName(String name) throws SQLException;
 }
