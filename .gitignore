@@ -39,3 +39,4 @@ build/
 /.idea/
 /src/main/resources/db.properties
 /logs/
+/src/main/resources/generation.properties
