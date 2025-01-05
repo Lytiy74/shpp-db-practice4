@@ -2,6 +2,7 @@ package shpp.azaika.dao;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import shpp.azaika.dto.ProductDTO;
 import shpp.azaika.dto.StoreDTO;
 
 import java.sql.*;
@@ -80,5 +81,22 @@ public class StoreDAO implements Dao<StoreDTO> {
             ps.setLong(1, id);
             ps.executeUpdate();
         }
+    }
+
+    @Override
+    public Optional<StoreDTO> findByName(String name) throws SQLException {
+        log.info("Find store by name '{}'", name);
+        String sql = "SELECT id, name, category_id, price FROM products WHERE name = ?";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, name);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    log.info("Store '{}' found", name);
+                    return Optional.of(new StoreDTO(resultSet.getString("address")));
+                }
+            }
+        }
+        log.warn("Store '{}' not found", name);
+        return Optional.empty();
     }
 }
