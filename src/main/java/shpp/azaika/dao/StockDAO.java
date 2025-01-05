@@ -97,4 +97,9 @@ public class StockDAO implements MultipleIdDao<StockDTO> {
     public void delete(long id) throws SQLException {
         throw new UnsupportedOperationException("Single ID delete not supported for Stock.");
     }
+
+    @Override
+    public Optional<StockDTO> findByName(String name) throws SQLException {
+        throw new UnsupportedOperationException("Find by Name not supported for Stock.");
+    }
 }
