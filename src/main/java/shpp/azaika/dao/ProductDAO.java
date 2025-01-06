@@ -2,7 +2,6 @@ package shpp.azaika.dao;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import shpp.azaika.dto.CategoryDTO;
 import shpp.azaika.dto.ProductDTO;
 
 import java.sql.Connection;
@@ -60,12 +59,11 @@ public class ProductDAO implements Dao<ProductDTO> {
     @Override
     public void save(ProductDTO productDTO) throws SQLException {
         log.info("Saving product {}", productDTO);
-        String sql = "INSERT INTO products (id ,category_id, name, price) VALUES (?, ?, ?, ?)";
+        String sql = "INSERT INTO products (category_id, name, price) VALUES (?, ?, ?)";
         try(PreparedStatement ps = connection.prepareStatement(sql)) {
-            ps.setLong(1, productDTO.getId());
-            ps.setLong(2, productDTO.getCategoryId());
-            ps.setString(3, productDTO.getName());
-            ps.setDouble(4, productDTO.getPrice());
+            ps.setLong(1, productDTO.getCategoryId());
+            ps.setString(2, productDTO.getName());
+            ps.setDouble(3, productDTO.getPrice());
             ps.executeUpdate();
         }
     }
@@ -100,13 +98,12 @@ public class ProductDAO implements Dao<ProductDTO> {
     @Override
     public void executeBatch() throws SQLException{
         log.info("Execute batch");
-        String sql = "INSERT INTO products (id, name, category_id, price) VALUES (?, ?, ?, ?)";
+        String sql = "INSERT INTO products (name, category_id, price) VALUES (?, ?, ?)";
         try(PreparedStatement ps = connection.prepareStatement(sql)){
             for(ProductDTO dto : batch){
-                ps.setLong(1, dto.getId());
-                ps.setString(2, dto.getName());
-                ps.setLong(3, dto.getCategoryId());
-                ps.setDouble(4, dto.getPrice());
+                ps.setString(1, dto.getName());
+                ps.setLong(2, dto.getCategoryId());
+                ps.setDouble(3, dto.getPrice());
                 ps.addBatch();
             }
             ps.executeBatch();
