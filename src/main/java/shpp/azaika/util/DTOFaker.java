@@ -12,7 +12,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicLong;
 
 public class DTOFaker {
     private static final Logger log = LoggerFactory.getLogger(DTOFaker.class);
@@ -24,14 +23,9 @@ public class DTOFaker {
     private final ThreadLocal<Faker> threadLocalFaker = ThreadLocal.withInitial(() -> new Faker(Locale.of("uk_UA")));
     private final Set<String> usedCategories = Collections.synchronizedSet(new HashSet<>());
 
-    private final AtomicLong storeIdCounter = new AtomicLong(1);
-    private final AtomicLong categoryIdCounter = new AtomicLong(1);
-    private final AtomicLong productIdCounter = new AtomicLong(1);
-
     public StoreDTO generateStoreDTO() {
-        long id = storeIdCounter.getAndIncrement();
         String address = threadLocalFaker.get().address().fullAddress();
-        StoreDTO store = new StoreDTO(id, address);
+        StoreDTO store = new StoreDTO(address);
         log.info("Generated Store: {}", store);
         return store;
     }
@@ -41,17 +35,15 @@ public class DTOFaker {
         do {
             categoryName = threadLocalFaker.get().commerce().department();
         } while (!usedCategories.add(categoryName));
-        long id = categoryIdCounter.getAndIncrement();
-        CategoryDTO category = new CategoryDTO(id, categoryName);
+        CategoryDTO category = new CategoryDTO(categoryName);
         log.info("Generated Category: {}", category);
         return category;
     }
 
     public ProductDTO generateProductDTO(long categoryId) {
         String productName = threadLocalFaker.get().commerce().productName();
-        long id = productIdCounter.getAndIncrement();
         long price = threadLocalFaker.get().number().numberBetween(MIN_PRICE, MAX_PRICE);
-        ProductDTO product = new ProductDTO(id, categoryId, productName, price);
+        ProductDTO product = new ProductDTO(categoryId, productName, price);
         log.info("Generated Product: {}", product);
         return product;
     }
