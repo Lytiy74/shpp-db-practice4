@@ -57,11 +57,12 @@ public class ProductDAO implements Dao<ProductDTO> {
     @Override
     public void save(ProductDTO productDTO) throws SQLException {
         log.info("Saving product {}", productDTO);
-        String sql = "INSERT INTO products (category_id, name, price) VALUES (?, ?, ?)";
+        String sql = "INSERT INTO products (id ,category_id, name, price) VALUES (?, ?, ?, ?)";
         try(PreparedStatement ps = connection.prepareStatement(sql)) {
-            ps.setLong(1, productDTO.getCategoryId());
-            ps.setString(2, productDTO.getName());
-            ps.setDouble(3, productDTO.getPrice());
+            ps.setLong(1, productDTO.getId());
+            ps.setLong(2, productDTO.getCategoryId());
+            ps.setString(3, productDTO.getName());
+            ps.setDouble(4, productDTO.getPrice());
             ps.executeUpdate();
         }
     }
