@@ -14,6 +14,8 @@ public class StoreDAO implements Dao<StoreDTO> {
     private static final Logger log = LoggerFactory.getLogger(StoreDAO.class);
     private final Connection connection;
 
+    private final List<StoreDTO> batch = new ArrayList<>();
+
     public StoreDAO(Connection connection) {
         this.connection = connection;
         log.info("Store DAO initialized");
@@ -22,7 +24,7 @@ public class StoreDAO implements Dao<StoreDTO> {
     @Override
     public Optional<StoreDTO> get(long id) throws SQLException {
         log.info("Get store with id {}", id);
-        String sql = "SELECT id, address FROM store WHERE id = ?";
+        String sql = "SELECT id, address FROM stores WHERE id = ?";
         try(PreparedStatement ps = connection.prepareStatement(sql)){
             ps.setLong(1, id);
             try(ResultSet rs = ps.executeQuery()){
@@ -81,6 +83,25 @@ public class StoreDAO implements Dao<StoreDTO> {
         try(PreparedStatement ps = connection.prepareStatement(sql)){
             ps.setLong(1, id);
             ps.executeUpdate();
+        }
+    }
+
+    @Override
+    public void addToBatch(StoreDTO storeDTO) {
+        batch.add(storeDTO);
+    }
+
+    @Override
+    public void executeBatch() throws SQLException {
+        log.info("Execute batch");
+        String sql = "INSERT INTO stores (id, address) VALUES (?, ?)";
+        try(PreparedStatement ps = connection.prepareStatement(sql)){
+            for(StoreDTO dto : batch){
+                ps.setLong(1, dto.getId());
+                ps.setString(2, dto.getAddress());
+                ps.addBatch();
+            }
+            ps.executeBatch();
         }
     }
 
