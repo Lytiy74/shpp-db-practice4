@@ -23,10 +23,10 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class App {
     private static final Logger log = LoggerFactory.getLogger(App.class);
-    public static int storesQuantity;
-    public static int categoriesQuantity;
-    public static int productsQuantity;
-    public static int stocksQuantity;
+    private static int storesQuantity;
+    private static int categoriesQuantity;
+    private static int productsQuantity;
+    private static int stocksQuantity;
 
     public static void main(String[] args) throws IOException {
         String productType = args.length > 0 ? args[0] : "default";
