@@ -25,32 +25,20 @@ public class DTOGenerator {
 
     public Map<Long, StoreDTO> generateStores(int storesQty) {
         for (int i = 0; i < storesQty; i++) {
-            StoreDTO store = generateStore();
+            StoreDTO store = faker.generateStoreDTO();
             stores.put(store.getId(), store);
         }
         log.info("Generated {} stores", storesQty);
         return stores;
     }
 
-    public StoreDTO generateStore() {
-        StoreDTO store = faker.generateStoreDTO();
-        stores.put(store.getId(), store);
-        return store;
-    }
-
     public Map<Long, CategoryDTO> generateCategories(int categoryQty) {
         for (int i = 0; i < categoryQty; i++) {
-            CategoryDTO category = generateCategory();
+            CategoryDTO category = faker.generateCategoryDTO();
             categories.put(category.getId(), category);
         }
         log.info("Generated {} categories", categoryQty);
         return categories;
-    }
-
-    public CategoryDTO generateCategory() {
-        CategoryDTO category = faker.generateCategoryDTO();
-        categories.put(category.getId(), category);
-        return category;
     }
 
     public Map<Long, ProductDTO> generateProducts(int productsQty) {
@@ -64,17 +52,11 @@ public class DTOGenerator {
                     .skip(random.nextLong(categories.size()))
                     .findFirst()
                     .orElseThrow(() -> new IllegalStateException("Category is empty"));
-            ProductDTO product = generateProduct(randomCategoryId);
+            ProductDTO product = faker.generateProductDTO(randomCategoryId);
             products.put(product.getId(), product);
         }
         log.info("Generated {} products", productsQty);
         return products;
-    }
-
-    public ProductDTO generateProduct(long categoryId) {
-        ProductDTO product = faker.generateProductDTO(categoryId);
-        products.put(product.getId(), product);
-        return product;
     }
 
     public Map<Pair<Long, Long>, StockDTO> generateStocks(int stockQty) {
@@ -92,19 +74,13 @@ public class DTOGenerator {
 
             Pair<Long, Long> stockKey = Pair.of(randomStoreId, randomProductId);
             if (!stocks.containsKey(stockKey)) {
-                StockDTO stock = generateStock(randomStoreId, randomProductId);
+                StockDTO stock = faker.generateStockDTO(randomStoreId, randomProductId);
                 stocks.put(stockKey, stock);
             } else {
                 i--;
             }
         }
         return stocks;
-    }
-
-    public StockDTO generateStock(long storeId, long productId) {
-        StockDTO stock = faker.generateStockDTO(storeId, productId);
-        stocks.put(Pair.of(storeId, productId), stock);
-        return stock;
     }
 
 }
