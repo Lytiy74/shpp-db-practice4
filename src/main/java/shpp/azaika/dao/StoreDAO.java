@@ -57,10 +57,9 @@ public class StoreDAO implements Dao<StoreDTO> {
     @Override
     public void save(StoreDTO storeDTO) throws SQLException {
         log.info("Save store {}", storeDTO);
-        String sql = "INSERT INTO stores (id, address) VALUES (?, ?)";
+        String sql = "INSERT INTO stores (address) VALUES (?)";
         try(PreparedStatement ps = connection.prepareStatement(sql)){
-            ps.setLong(1, storeDTO.getId());
-            ps.setString(2, storeDTO.getAddress());
+            ps.setString(1, storeDTO.getAddress());
             ps.executeUpdate();
         }
     }
@@ -94,11 +93,10 @@ public class StoreDAO implements Dao<StoreDTO> {
     @Override
     public void executeBatch() throws SQLException {
         log.info("Execute batch");
-        String sql = "INSERT INTO stores (id, address) VALUES (?, ?)";
+        String sql = "INSERT INTO stores (address) VALUES (?)";
         try(PreparedStatement ps = connection.prepareStatement(sql)){
             for(StoreDTO dto : batch){
-                ps.setLong(1, dto.getId());
-                ps.setString(2, dto.getAddress());
+                ps.setString(1, dto.getAddress());
                 ps.addBatch();
             }
             ps.executeBatch();
