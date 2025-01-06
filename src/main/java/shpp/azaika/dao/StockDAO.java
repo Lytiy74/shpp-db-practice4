@@ -17,6 +17,8 @@ public class StockDAO implements MultipleIdDao<StockDTO> {
     private static final Logger log = LoggerFactory.getLogger(StockDAO.class);
     private final Connection connection;
 
+    private final List<StockDTO> batch = new ArrayList<>();
+
     public StockDAO(Connection connection) {
         this.connection = connection;
     }
@@ -86,6 +88,26 @@ public class StockDAO implements MultipleIdDao<StockDTO> {
             ps.setLong(1, shopId);
             ps.setLong(2, productId);
             ps.executeUpdate();
+        }
+    }
+
+    @Override
+    public void addToBatch(StockDTO stockDTO) {
+        batch.add(stockDTO);
+    }
+
+    @Override
+    public void executeBatch() throws SQLException {
+        log.info("Execute Batch");
+        String sql = "INSERT INTO stock (shop_id, product_id, quantity) VALUES (?, ?, ?)";
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            for (StockDTO stockDTO : batch) {
+                ps.setLong(1, stockDTO.getShopId());
+                ps.setLong(2, stockDTO.getProductId());
+                ps.setLong(3, stockDTO.getQuantity());
+                ps.addBatch();
+            }
+            ps.executeBatch();
         }
     }
 
