@@ -56,9 +56,10 @@ public class CategoryDAO implements Dao<CategoryDTO>{
     @Override
     public void save(CategoryDTO categoryDTO) throws SQLException {
         log.info("Save category {}", categoryDTO);
-        String sql = "INSERT INTO categories (name) VALUES (?)";
+        String sql = "INSERT INTO categories (id, name) VALUES (?, ?)";
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
-            ps.setString(1,categoryDTO.getCategoryName());
+            ps.setLong(1,categoryDTO.getId());
+            ps.setString(2,categoryDTO.getCategoryName());
             ps.executeUpdate();
         }
     }
