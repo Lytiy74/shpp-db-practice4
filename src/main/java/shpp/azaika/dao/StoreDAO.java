@@ -55,9 +55,10 @@ public class StoreDAO implements Dao<StoreDTO> {
     @Override
     public void save(StoreDTO storeDTO) throws SQLException {
         log.info("Save store {}", storeDTO);
-        String sql = "INSERT INTO stores (address) VALUES (?)";
+        String sql = "INSERT INTO stores (id, address) VALUES (?, ?)";
         try(PreparedStatement ps = connection.prepareStatement(sql)){
-            ps.setString(1, storeDTO.getAddress());
+            ps.setLong(1, storeDTO.getId());
+            ps.setString(2, storeDTO.getAddress());
             ps.executeUpdate();
         }
     }
