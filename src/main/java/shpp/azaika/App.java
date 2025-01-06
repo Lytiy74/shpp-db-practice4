@@ -3,6 +3,7 @@ package shpp.azaika;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import jakarta.validation.ValidatorFactory;
+import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import shpp.azaika.dao.*;
@@ -10,32 +11,29 @@ import shpp.azaika.dto.CategoryDTO;
 import shpp.azaika.dto.ProductDTO;
 import shpp.azaika.dto.StockDTO;
 import shpp.azaika.dto.StoreDTO;
-import shpp.azaika.util.DTOFaker;
+import shpp.azaika.util.DTOGenerator;
 
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
-import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.concurrent.ThreadLocalRandom;
 
 public class App {
     private static final Logger log = LoggerFactory.getLogger(App.class);
-    private static int storesQuantity;
-    private static int categoriesQuantity;
-    private static int productsQuantity;
-    private static int stocksQuantity;
+
 
     public static void main(String[] args) throws IOException {
-        String productType = args.length > 0 ? args[0] : "default";
+        log.info("Starting application...");
+        String productType = args.length > 0 ? args[0] : "Взуття";
         Properties generationProperties = new Properties();
         generationProperties.load(Thread.currentThread().getContextClassLoader().getResourceAsStream("generation.properties"));
-        storesQuantity = Integer.parseInt(generationProperties.getProperty("stores.quantity"));
-        categoriesQuantity = Integer.parseInt(generationProperties.getProperty("categories.quantity"));
-        productsQuantity = Integer.parseInt(generationProperties.getProperty("products.quantity"));
-        stocksQuantity = Integer.parseInt(generationProperties.getProperty("stock.quantity"));
+        int storesQuantity = Integer.parseInt(generationProperties.getProperty("stores.quantity"));
+        int categoriesQuantity = Integer.parseInt(generationProperties.getProperty("categories.quantity"));
+        int productsQuantity = Integer.parseInt(generationProperties.getProperty("products.quantity"));
+        int stocksQuantity = Integer.parseInt(generationProperties.getProperty("stock.quantity"));
 
         Properties dbProperties = new Properties();
         dbProperties.load(Thread.currentThread().getContextClassLoader().getResourceAsStream("db.properties"));
@@ -43,17 +41,48 @@ public class App {
         try (Connection connection = DriverManager.getConnection(
                 dbProperties.getProperty("db.url"), dbProperties.getProperty("db.user"), dbProperties.getProperty("db.password"));
              ValidatorFactory factory = Validation.buildDefaultValidatorFactory()) {
-
-            log.info("Starting application...");
-
-            DAOContainer daoContainer = initializeDAOs(connection);
-            DTOFaker faker = new DTOFaker();
             Validator validator = factory.getValidator();
 
-            generateStores(faker, daoContainer.storeDAO, validator);
-            generateCategories(faker, daoContainer.categoryDAO, validator);
-            generateProducts(faker, daoContainer.categoryDAO, daoContainer.productDAO, validator);
-            generateStocks(faker, daoContainer.productDAO, daoContainer.storeDAO, daoContainer.stockDAO);
+
+            DAOContainer daoContainer = initializeDAOs(connection);
+            log.info("Generating {} stores, {} categories, {} products and {} stocks...", storesQuantity, categoriesQuantity, productsQuantity, stocksQuantity);
+            DTOGenerator generator = new DTOGenerator();
+            Map<Long, StoreDTO> longStoreDTOMap = generator.generateStores(storesQuantity);
+            Map<Long, CategoryDTO> longCategoryDTOMap = generator.generateCategories(categoriesQuantity);
+            Map<Long, ProductDTO> longProductDTOMap = generator.generateProducts(productsQuantity);
+            Map<Pair<Long, Long>, StockDTO> longStockDTOMap = generator.generateStocks(stocksQuantity);
+            longStoreDTOMap.forEach((id, storeDTO) -> {
+                try {
+                    validateAndSave(storeDTO, daoContainer.storeDAO,validator);
+                } catch (SQLException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+
+            longCategoryDTOMap.forEach((id, categoryDTO) -> {
+                try {
+                    validateAndSave(categoryDTO, daoContainer.categoryDAO,validator);
+                } catch (SQLException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+
+            longProductDTOMap.forEach((id, productDTO) -> {
+                try {
+                    validateAndSave(productDTO, daoContainer.productDAO, validator);
+                } catch (SQLException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+
+            longStockDTOMap.forEach((id, stockDTO) -> {
+                try {
+                    validateAndSave(stockDTO, daoContainer.stockDAO, validator);
+                } catch (SQLException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+
 
             log.info("Querying store with most products of type: {}", productType);
             String storeAddress = getStoreWithMostProductsOfType(daoContainer, productType);
@@ -64,44 +93,6 @@ public class App {
         }
     }
 
-
-    private static void generateStores(DTOFaker faker, Dao<StoreDTO> storeDAO, Validator validator) throws SQLException {
-        log.info("Generating and saving stores...");
-        for (int i = 0; i < storesQuantity; i++) {
-            StoreDTO storeDTO = faker.generateStore();
-            validateAndSave(storeDTO, storeDAO, validator);
-        }
-    }
-
-    private static void generateCategories(DTOFaker faker, Dao<CategoryDTO> categoryDAO, Validator validator) throws SQLException {
-        log.info("Generating and saving categories...");
-        for (int i = 0; i < categoriesQuantity; i++) {
-            CategoryDTO categoryDTO = faker.generateCategory();
-            validateAndSave(categoryDTO, categoryDAO, validator);
-        }
-    }
-
-    private static void generateProducts(DTOFaker faker, Dao<CategoryDTO> categoryDAO, Dao<ProductDTO> productDAO, Validator validator) throws SQLException {
-        log.info("Generating and saving products...");
-        List<CategoryDTO> categories = categoryDAO.getAll();
-        for (int i = 0; i < productsQuantity; i++) {
-            long randomCategoryId = ThreadLocalRandom.current().nextLong(1, categories.size());
-            ProductDTO productDTO = faker.generateProduct(randomCategoryId);
-            validateAndSave(productDTO, productDAO, validator);
-        }
-    }
-
-    private static void generateStocks(DTOFaker faker, Dao<ProductDTO> productDAO, Dao<StoreDTO> storeDAO, MultipleIdDao<StockDTO> stockDAO) throws SQLException {
-        log.info("Generating and saving stocks...");
-        List<ProductDTO> products = productDAO.getAll();
-        List<StoreDTO> stores = storeDAO.getAll();
-        for (int i = 0; i < stocksQuantity; i++) {
-            long randomProductId = products.get(i % products.size()).getId();
-            long randomStoreId = stores.get(i % stores.size()).getId();
-            StockDTO stockDTO = faker.generateStock(randomStoreId, randomProductId);
-            stockDAO.save(stockDTO);
-        }
-    }
 
     private static <T> void validateAndSave(T dto, Dao<T> dao, Validator validator) throws SQLException {
         var violations = validator.validate(dto);
