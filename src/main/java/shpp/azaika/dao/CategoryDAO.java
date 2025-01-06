@@ -15,6 +15,7 @@ import java.util.Optional;
 public class CategoryDAO implements Dao<CategoryDTO>{
     private static final Logger log = LoggerFactory.getLogger(CategoryDAO.class);
     private final Connection connection;
+    private final List<CategoryDTO> batch = new ArrayList<>();
 
     public CategoryDAO(Connection connection) {
         this.connection = connection;
@@ -84,6 +85,26 @@ public class CategoryDAO implements Dao<CategoryDTO>{
             ps.setLong(1, id);
             ps.executeUpdate();
         }
+    }
+
+    @Override
+    public void addToBatch(CategoryDTO dto){
+        batch.add(dto);
+    }
+
+    @Override
+    public void executeBatch() throws SQLException{
+        log.info("Execute batch");
+        String sql = "INSERT INTO categories (id, name) VALUES (?, ?)";
+        try(PreparedStatement ps = connection.prepareStatement(sql)){
+            for(CategoryDTO dto : batch){
+                ps.setLong(1, dto.getId());
+                ps.setString(2, dto.getCategoryName());
+                ps.addBatch();
+            }
+            ps.executeBatch();
+        }
+        batch.clear();
     }
 
     public Optional<CategoryDTO> findByName(String name) throws SQLException {

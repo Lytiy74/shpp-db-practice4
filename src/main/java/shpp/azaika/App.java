@@ -53,36 +53,39 @@ public class App {
             Map<Pair<Long, Long>, StockDTO> longStockDTOMap = generator.generateStocks(stocksQuantity);
             longStoreDTOMap.forEach((id, storeDTO) -> {
                 try {
-                    validateAndSave(storeDTO, daoContainer.storeDAO,validator);
+                    validateAndAddToBatch(storeDTO, daoContainer.storeDAO,validator);
                 } catch (SQLException e) {
                     throw new RuntimeException(e);
                 }
             });
+            daoContainer.storeDAO.executeBatch();
 
             longCategoryDTOMap.forEach((id, categoryDTO) -> {
                 try {
-                    validateAndSave(categoryDTO, daoContainer.categoryDAO,validator);
+                    validateAndAddToBatch(categoryDTO, daoContainer.categoryDAO,validator);
                 } catch (SQLException e) {
                     throw new RuntimeException(e);
                 }
             });
+            daoContainer.categoryDAO.executeBatch();
 
             longProductDTOMap.forEach((id, productDTO) -> {
                 try {
-                    validateAndSave(productDTO, daoContainer.productDAO, validator);
+                    validateAndAddToBatch(productDTO, daoContainer.productDAO, validator);
                 } catch (SQLException e) {
                     throw new RuntimeException(e);
                 }
             });
+            daoContainer.productDAO.executeBatch();
 
             longStockDTOMap.forEach((id, stockDTO) -> {
                 try {
-                    validateAndSave(stockDTO, daoContainer.stockDAO, validator);
+                    validateAndAddToBatch(stockDTO, daoContainer.stockDAO, validator);
                 } catch (SQLException e) {
                     throw new RuntimeException(e);
                 }
             });
-
+            daoContainer.stockDAO.executeBatch();
 
             log.info("Querying store with most products of type: {}", productType);
             String storeAddress = getStoreWithMostProductsOfType(daoContainer, productType);
@@ -98,6 +101,15 @@ public class App {
         var violations = validator.validate(dto);
         if (violations.isEmpty()) {
             dao.save(dto);
+        } else {
+            violations.forEach(violation -> log.error("Validation failed: {}", violation.getMessage()));
+        }
+    }
+
+    private static <T> void validateAndAddToBatch(T dto, Dao<T> dao, Validator validator) throws SQLException {
+        var violations = validator.validate(dto);
+        if (violations.isEmpty()) {
+            dao.addToBatch(dto);
         } else {
             violations.forEach(violation -> log.error("Validation failed: {}", violation.getMessage()));
         }
