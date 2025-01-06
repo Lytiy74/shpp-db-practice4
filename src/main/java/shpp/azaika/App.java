@@ -20,6 +20,7 @@ import java.sql.SQLException;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 
 public class App {
     private static final Logger log = LoggerFactory.getLogger(App.class);
@@ -47,11 +48,9 @@ public class App {
             DAOContainer daoContainer = initializeDAOs(connection);
             log.info("Generating {} stores, {} categories, {} products and {} stocks...", storesQuantity, categoriesQuantity, productsQuantity, stocksQuantity);
             DTOGenerator generator = new DTOGenerator();
-            Map<Long, StoreDTO> longStoreDTOMap = generator.generateStores(storesQuantity);
-            Map<Long, CategoryDTO> longCategoryDTOMap = generator.generateCategories(categoriesQuantity);
-            Map<Long, ProductDTO> longProductDTOMap = generator.generateProducts(productsQuantity);
-            Map<Pair<Long, Long>, StockDTO> longStockDTOMap = generator.generateStocks(stocksQuantity);
-            longStoreDTOMap.forEach((id, storeDTO) -> {
+
+            Set<StoreDTO> storeDTOS = generator.generateStores(storesQuantity);
+            storeDTOS.forEach((storeDTO) -> {
                 try {
                     validateAndAddToBatch(storeDTO, daoContainer.storeDAO,validator);
                 } catch (SQLException e) {
@@ -60,7 +59,8 @@ public class App {
             });
             daoContainer.storeDAO.executeBatch();
 
-            longCategoryDTOMap.forEach((id, categoryDTO) -> {
+            Set<CategoryDTO> categoryDTOS = generator.generateCategories(categoriesQuantity);
+            categoryDTOS.forEach((categoryDTO) -> {
                 try {
                     validateAndAddToBatch(categoryDTO, daoContainer.categoryDAO,validator);
                 } catch (SQLException e) {
@@ -69,7 +69,8 @@ public class App {
             });
             daoContainer.categoryDAO.executeBatch();
 
-            longProductDTOMap.forEach((id, productDTO) -> {
+            Set<ProductDTO> productDTOS = generator.generateProducts(productsQuantity);
+            productDTOS.forEach((productDTO) -> {
                 try {
                     validateAndAddToBatch(productDTO, daoContainer.productDAO, validator);
                 } catch (SQLException e) {
@@ -78,7 +79,8 @@ public class App {
             });
             daoContainer.productDAO.executeBatch();
 
-            longStockDTOMap.forEach((id, stockDTO) -> {
+            Set<StockDTO> stockDTOS = generator.generateStocks(stocksQuantity);
+            stockDTOS.forEach((stockDTO) -> {
                 try {
                     validateAndAddToBatch(stockDTO, daoContainer.stockDAO, validator);
                 } catch (SQLException e) {
