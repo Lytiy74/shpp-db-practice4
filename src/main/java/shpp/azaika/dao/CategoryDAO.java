@@ -4,10 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import shpp.azaika.dto.CategoryDTO;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -57,10 +54,9 @@ public class CategoryDAO implements Dao<CategoryDTO>{
     @Override
     public void save(CategoryDTO categoryDTO) throws SQLException {
         log.info("Save category {}", categoryDTO);
-        String sql = "INSERT INTO categories (id, name) VALUES (?, ?)";
+        String sql = "INSERT INTO categories (name) VALUES ( ?)";
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
-            ps.setLong(1,categoryDTO.getId());
-            ps.setString(2,categoryDTO.getCategoryName());
+            ps.setString(1,categoryDTO.getCategoryName());
             ps.executeUpdate();
         }
     }
@@ -95,11 +91,10 @@ public class CategoryDAO implements Dao<CategoryDTO>{
     @Override
     public void executeBatch() throws SQLException{
         log.info("Execute batch");
-        String sql = "INSERT INTO categories (id, name) VALUES (?, ?)";
-        try(PreparedStatement ps = connection.prepareStatement(sql)){
+        String sql = "INSERT INTO categories (name) VALUES (?)";
+        try(PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)){
             for(CategoryDTO dto : batch){
-                ps.setLong(1, dto.getId());
-                ps.setString(2, dto.getCategoryName());
+                ps.setString(1, dto.getCategoryName());
                 ps.addBatch();
             }
             ps.executeBatch();
