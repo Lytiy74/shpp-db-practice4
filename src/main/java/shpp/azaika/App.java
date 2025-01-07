@@ -3,7 +3,6 @@ package shpp.azaika;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import jakarta.validation.ValidatorFactory;
-import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import shpp.azaika.dao.*;
@@ -17,9 +16,10 @@ import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
-import java.util.Map;
+import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 
 public class App {
     private static final Logger log = LoggerFactory.getLogger(App.class);
@@ -47,45 +47,31 @@ public class App {
             DAOContainer daoContainer = initializeDAOs(connection);
             log.info("Generating {} stores, {} categories, {} products and {} stocks...", storesQuantity, categoriesQuantity, productsQuantity, stocksQuantity);
             DTOGenerator generator = new DTOGenerator();
-            Map<Long, StoreDTO> longStoreDTOMap = generator.generateStores(storesQuantity);
-            Map<Long, CategoryDTO> longCategoryDTOMap = generator.generateCategories(categoriesQuantity);
-            Map<Long, ProductDTO> longProductDTOMap = generator.generateProducts(productsQuantity);
-            Map<Pair<Long, Long>, StockDTO> longStockDTOMap = generator.generateStocks(stocksQuantity);
-            longStoreDTOMap.forEach((id, storeDTO) -> {
-                try {
-                    validateAndAddToBatch(storeDTO, daoContainer.storeDAO,validator);
-                } catch (SQLException e) {
-                    throw new RuntimeException(e);
-                }
-            });
-            daoContainer.storeDAO.executeBatch();
 
-            longCategoryDTOMap.forEach((id, categoryDTO) -> {
-                try {
-                    validateAndAddToBatch(categoryDTO, daoContainer.categoryDAO,validator);
-                } catch (SQLException e) {
-                    throw new RuntimeException(e);
-                }
-            });
-            daoContainer.categoryDAO.executeBatch();
+            Set<CategoryDTO> categoryDTOS = generator.generateCategories(categoriesQuantity);
+            for (CategoryDTO categoryDTO : categoryDTOS) {
+                daoContainer.categoryDAO.addToBatch(categoryDTO);
+            }
+            List<Long> categoriesIds = daoContainer.categoryDAO.executeBatch();
 
-            longProductDTOMap.forEach((id, productDTO) -> {
-                try {
-                    validateAndAddToBatch(productDTO, daoContainer.productDAO, validator);
-                } catch (SQLException e) {
-                    throw new RuntimeException(e);
-                }
-            });
-            daoContainer.productDAO.executeBatch();
+            Set<StoreDTO> storeDTOS = generator.generateStores(storesQuantity);
+            for (StoreDTO storeDTO : storeDTOS) {
+                daoContainer.storeDAO.addToBatch(storeDTO);
+            }
+            List<Long> storesIds = daoContainer.storeDAO.executeBatch();
 
-            longStockDTOMap.forEach((id, stockDTO) -> {
-                try {
-                    validateAndAddToBatch(stockDTO, daoContainer.stockDAO, validator);
-                } catch (SQLException e) {
-                    throw new RuntimeException(e);
-                }
-            });
-            daoContainer.stockDAO.executeBatch();
+            Set<ProductDTO> productDTOS = generator.generateProducts(productsQuantity,categoriesIds);
+            for (ProductDTO productDTO : productDTOS) {
+                daoContainer.productDAO.addToBatch(productDTO);
+            }
+            List<Long> productsIds = daoContainer.productDAO.executeBatch();
+
+            Set<StockDTO> stockDTOS = generator.generateStocks(stocksQuantity,storesIds,productsIds);
+            for (StockDTO stockDTO : stockDTOS) {
+                daoContainer.stockDAO.addToBatch(stockDTO);
+            }
+            List<Long> stocksIds = daoContainer.stockDAO.executeBatch();
+
 
             log.info("Querying store with most products of type: {}", productType);
             String storeAddress = getStoreWithMostProductsOfType(daoContainer, productType);
