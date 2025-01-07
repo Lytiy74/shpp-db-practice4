@@ -102,7 +102,7 @@ public class CategoryDAO implements Dao<CategoryDTO>{
             ResultSet rs = ps.getGeneratedKeys();
             while(rs.next()){
                 generatedKeys.add(rs.getLong(1));
-                log.info("Generated key {}", rs.getLong(1));
+                log.debug("Generated key {}", rs.getLong(1));
             }
         }
         batch.clear();

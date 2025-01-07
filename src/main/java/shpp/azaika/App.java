@@ -1,8 +1,6 @@
 package shpp.azaika;
 
-import jakarta.validation.Validation;
-import jakarta.validation.Validator;
-import jakarta.validation.ValidatorFactory;
+import org.apache.commons.lang3.time.StopWatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import shpp.azaika.dao.*;
@@ -20,6 +18,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.*;
 
 public class App {
     private static final Logger log = LoggerFactory.getLogger(App.class);
@@ -28,6 +27,7 @@ public class App {
     public static void main(String[] args) throws IOException {
         log.info("Starting application...");
         String productType = args.length > 0 ? args[0] : "Взуття";
+
         Properties generationProperties = new Properties();
         generationProperties.load(Thread.currentThread().getContextClassLoader().getResourceAsStream("generation.properties"));
         int storesQuantity = Integer.parseInt(generationProperties.getProperty("stores.quantity"));
@@ -40,64 +40,84 @@ public class App {
 
         try (Connection connection = DriverManager.getConnection(
                 dbProperties.getProperty("db.url"), dbProperties.getProperty("db.user"), dbProperties.getProperty("db.password"));
-             ValidatorFactory factory = Validation.buildDefaultValidatorFactory()) {
-            Validator validator = factory.getValidator();
-
-
+             ExecutorService executorService = Executors.newFixedThreadPool(4)) { // обмеження на 4 потоки
+            StopWatch totalWatch = StopWatch.createStarted();
             DAOContainer daoContainer = initializeDAOs(connection);
             log.info("Generating {} stores, {} categories, {} products and {} stocks...", storesQuantity, categoriesQuantity, productsQuantity, stocksQuantity);
             DTOGenerator generator = new DTOGenerator();
+            // Використовуємо Callable для паралельного виконання завдань
+            Future<List<Long>> categoryTask = executorService.submit(() -> {
+                StopWatch stopWatch = StopWatch.createStarted();
+                log.info("Generating categories...");
+                Set<CategoryDTO> categoryDTOS = generator.generateCategories(categoriesQuantity);
+                for (CategoryDTO categoryDTO : categoryDTOS) {
+                    daoContainer.categoryDAO.addToBatch(categoryDTO);
+                }
+                log.info("Categories generated in {} ms", stopWatch.getTime(TimeUnit.MILLISECONDS));
+                StopWatch batching = StopWatch.createStarted();
+                List<Long> ids = daoContainer.categoryDAO.executeBatch();
+                log.info("Categories batched in {} ms", batching.getTime(TimeUnit.MILLISECONDS));
+                return ids;
+            });
 
-            Set<CategoryDTO> categoryDTOS = generator.generateCategories(categoriesQuantity);
-            for (CategoryDTO categoryDTO : categoryDTOS) {
-                daoContainer.categoryDAO.addToBatch(categoryDTO);
-            }
-            List<Long> categoriesIds = daoContainer.categoryDAO.executeBatch();
+            Future<List<Long>> storeTask = executorService.submit(() -> {
+                StopWatch stopWatch = StopWatch.createStarted();
+                log.info("Generating stores...");
+                Set<StoreDTO> storeDTOS = generator.generateStores(storesQuantity);
+                for (StoreDTO storeDTO : storeDTOS) {
+                    daoContainer.storeDAO.addToBatch(storeDTO);
+                }
+                log.info("Stores generated in {} ms", stopWatch.getTime(TimeUnit.MILLISECONDS));
+                StopWatch batching = StopWatch.createStarted();
+                List<Long> ids = daoContainer.storeDAO.executeBatch();
+                log.info("Stores batched in {} ms", batching.getTime(TimeUnit.MILLISECONDS));
+                return ids;
+            });
 
-            Set<StoreDTO> storeDTOS = generator.generateStores(storesQuantity);
-            for (StoreDTO storeDTO : storeDTOS) {
-                daoContainer.storeDAO.addToBatch(storeDTO);
-            }
-            List<Long> storesIds = daoContainer.storeDAO.executeBatch();
+            // Генеруємо категорії перед подальшою обробкою
+            List<Long> categoriesIds = categoryTask.get(); // Очікуємо завершення завдання
+            Future<List<Long>> productTask = executorService.submit(() -> {
+                StopWatch stopWatch = StopWatch.createStarted();
+                log.info("Generating products...");
+                Set<ProductDTO> productDTOS = generator.generateProducts(productsQuantity, categoriesIds);
+                for (ProductDTO productDTO : productDTOS) {
+                    daoContainer.productDAO.addToBatch(productDTO);
+                }
+                log.info("Products generated in {} ms", stopWatch.getTime(TimeUnit.MILLISECONDS));
+                StopWatch batching = StopWatch.createStarted();
+                List<Long> ids = daoContainer.productDAO.executeBatch();
+                log.info("Products batched in {} ms", batching.getTime(TimeUnit.MILLISECONDS));
+                return ids;
+            });
 
-            Set<ProductDTO> productDTOS = generator.generateProducts(productsQuantity,categoriesIds);
-            for (ProductDTO productDTO : productDTOS) {
-                daoContainer.productDAO.addToBatch(productDTO);
-            }
-            List<Long> productsIds = daoContainer.productDAO.executeBatch();
+            List<Long> storesIds = storeTask.get(); // Отримуємо результат із завдання
+            List<Long> productsIds = productTask.get(); // Отримуємо продукти перед генерацією складів
 
-            Set<StockDTO> stockDTOS = generator.generateStocks(stocksQuantity,storesIds,productsIds);
-            for (StockDTO stockDTO : stockDTOS) {
-                daoContainer.stockDAO.addToBatch(stockDTO);
-            }
-            List<Long> stocksIds = daoContainer.stockDAO.executeBatch();
+            Future<Void> stockTask = executorService.submit(() -> {
+                StopWatch stopWatch = StopWatch.createStarted();
+                log.info("Generating stocks...");
+                Set<StockDTO> stockDTOS = generator.generateStocks(stocksQuantity, storesIds, productsIds);
+                for (StockDTO stockDTO : stockDTOS) {
+                    daoContainer.stockDAO.addToBatch(stockDTO);
+                }
+                log.info("Stocks generated in {} ms", stopWatch.getTime(TimeUnit.MILLISECONDS));
+                StopWatch batching = StopWatch.createStarted();
+                daoContainer.stockDAO.executeBatch();
+                log.info("Stocks batched in {} ms", batching.getTime(TimeUnit.MILLISECONDS));
+                return null;
+            });
 
+            stockTask.get();
 
             log.info("Querying store with most products of type: {}", productType);
             String storeAddress = getStoreWithMostProductsOfType(daoContainer, productType);
             log.info("Store with most products of type {}: {}", productType, storeAddress);
+            log.info("Total time: {} ms", totalWatch.getTime(TimeUnit.MILLISECONDS));
 
         } catch (SQLException e) {
             log.error("Database error occurred", e);
-        }
-    }
-
-
-    private static <T> void validateAndSave(T dto, Dao<T> dao, Validator validator) throws SQLException {
-        var violations = validator.validate(dto);
-        if (violations.isEmpty()) {
-            dao.save(dto);
-        } else {
-            violations.forEach(violation -> log.error("Validation failed: {}", violation.getMessage()));
-        }
-    }
-
-    private static <T> void validateAndAddToBatch(T dto, Dao<T> dao, Validator validator) throws SQLException {
-        var violations = validator.validate(dto);
-        if (violations.isEmpty()) {
-            dao.addToBatch(dto);
-        } else {
-            violations.forEach(violation -> log.error("Validation failed: {}", violation.getMessage()));
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("Error occurred during multi-threaded execution", e);
         }
     }
 
@@ -125,6 +145,7 @@ public class App {
         final Dao<CategoryDTO> categoryDAO;
         final Dao<ProductDTO> productDAO;
         final StockDAO stockDAO;
+
         DAOContainer(Dao<StoreDTO> storeDAO, Dao<CategoryDTO> categoryDAO,
                      Dao<ProductDTO> productDAO, StockDAO stockDAO) {
             this.storeDAO = storeDAO;
@@ -134,6 +155,7 @@ public class App {
         }
 
     }
+
     private static DAOContainer initializeDAOs(Connection connection) throws SQLException {
         return new DAOContainer(
                 new StoreDAO(connection),

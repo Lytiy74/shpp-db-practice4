@@ -26,7 +26,7 @@ public class DTOFaker {
     public StoreDTO generateStoreDTO() {
         String address = threadLocalFaker.get().address().fullAddress();
         StoreDTO store = new StoreDTO(address);
-        log.info("Generated Store: {}", store);
+        log.debug("Generated Store: {}", store);
         return store;
     }
 
@@ -36,7 +36,7 @@ public class DTOFaker {
             categoryName = threadLocalFaker.get().commerce().department();
         } while (!usedCategories.add(categoryName));
         CategoryDTO category = new CategoryDTO(categoryName);
-        log.info("Generated Category: {}", category);
+        log.debug("Generated Category: {}", category);
         return category;
     }
 
@@ -44,14 +44,14 @@ public class DTOFaker {
         String productName = threadLocalFaker.get().commerce().productName();
         long price = threadLocalFaker.get().number().numberBetween(MIN_PRICE, MAX_PRICE);
         ProductDTO product = new ProductDTO(categoryId, productName, price);
-        log.info("Generated Product: {}", product);
+        log.debug("Generated Product: {}", product);
         return product;
     }
 
     public StockDTO generateStockDTO(long storeId, long productId) {
         long quantity = threadLocalFaker.get().number().numberBetween(1, MAX_STOCK_QUANTITY);
         StockDTO stock = new StockDTO(storeId, productId, quantity);
-        log.info("Generated Stock: {}", stock);
+        log.debug("Generated Stock: {}", stock);
         return stock;
     }
 
