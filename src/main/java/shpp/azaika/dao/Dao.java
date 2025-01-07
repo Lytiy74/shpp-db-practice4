@@ -17,7 +17,7 @@ public interface Dao<T> {
 
     void addToBatch(T t);
 
-    void executeBatch() throws SQLException;
+    List<Long> executeBatch() throws SQLException;
 
     Optional<T> findByName(String name) throws SQLException;
 }
