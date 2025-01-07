@@ -13,6 +13,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.BlockingQueue;
 
 public class DTOGenerator {
 
@@ -80,5 +81,18 @@ public class DTOGenerator {
         }
         return stocks;
     }
+
+    public void generateStoresToQueue(int storesQuantity, BlockingQueue<StoreDTO> storeDTOBlockingQueue) {
+        for (int i = 0; i < storesQuantity; i++) {
+            storeDTOBlockingQueue.add(faker.generateStoreDTO());
+        }
+    }
+
+    public void generateCategoriesToQueue(int categoriesQuantity, BlockingQueue<CategoryDTO> categoriesGeneratedQueue) {
+        for (int i = 0; i < categoriesQuantity; i++) {
+            categoriesGeneratedQueue.add(faker.generateCategoryDTO());
+        }
+    }
+
 
 }
