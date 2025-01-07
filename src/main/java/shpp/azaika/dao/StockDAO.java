@@ -5,10 +5,7 @@ import org.slf4j.LoggerFactory;
 import shpp.azaika.dto.StockDTO;
 import shpp.azaika.dto.StoreDTO;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -97,10 +94,11 @@ public class StockDAO implements MultipleIdDao<StockDTO> {
     }
 
     @Override
-    public void executeBatch() throws SQLException {
+    public List<Long> executeBatch() throws SQLException {
         log.info("Execute Batch");
         String sql = "INSERT INTO stock (shop_id, product_id, quantity) VALUES (?, ?, ?)";
-        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+        List<Long> generatedKeys = new ArrayList<>();
+        try (PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             for (StockDTO stockDTO : batch) {
                 ps.setLong(1, stockDTO.getShopId());
                 ps.setLong(2, stockDTO.getProductId());
@@ -108,7 +106,14 @@ public class StockDAO implements MultipleIdDao<StockDTO> {
                 ps.addBatch();
             }
             ps.executeBatch();
+            ResultSet rs = ps.getGeneratedKeys();
+            while (rs.next()) {
+                generatedKeys.add(rs.getLong(1));
+                log.info("Generated key {}", rs.getLong(1));
+            }
         }
+        batch.clear();
+        return generatedKeys;
     }
 
     @Override

@@ -89,18 +89,26 @@ public class CategoryDAO implements Dao<CategoryDTO>{
     }
 
     @Override
-    public void executeBatch() throws SQLException{
+    public List<Long> executeBatch() throws SQLException{
         log.info("Execute batch");
         String sql = "INSERT INTO categories (name) VALUES (?)";
+        List<Long> generatedKeys = new ArrayList<>();
         try(PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)){
             for(CategoryDTO dto : batch){
                 ps.setString(1, dto.getCategoryName());
                 ps.addBatch();
             }
             ps.executeBatch();
+            ResultSet rs = ps.getGeneratedKeys();
+            while(rs.next()){
+                generatedKeys.add(rs.getLong(1));
+                log.info("Generated key {}", rs.getLong(1));
+            }
         }
         batch.clear();
+        return generatedKeys;
     }
+
 
     public Optional<CategoryDTO> findByName(String name) throws SQLException {
         log.info("Find category by name '{}'", name);

@@ -4,10 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import shpp.azaika.dto.ProductDTO;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -96,10 +93,11 @@ public class ProductDAO implements Dao<ProductDTO> {
     }
 
     @Override
-    public void executeBatch() throws SQLException{
+    public List<Long> executeBatch() throws SQLException{
         log.info("Execute batch");
         String sql = "INSERT INTO products (name, category_id, price) VALUES (?, ?, ?)";
-        try(PreparedStatement ps = connection.prepareStatement(sql)){
+        List<Long> generatedKeys = new ArrayList<>();
+        try(PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)){
             for(ProductDTO dto : batch){
                 ps.setString(1, dto.getName());
                 ps.setLong(2, dto.getCategoryId());
@@ -107,8 +105,14 @@ public class ProductDAO implements Dao<ProductDTO> {
                 ps.addBatch();
             }
             ps.executeBatch();
+            ResultSet rs = ps.getGeneratedKeys();
+            while(rs.next()){
+                generatedKeys.add(rs.getLong(1));
+                log.info("Generated key {}", rs.getLong(1));
+            }
         }
         batch.clear();
+        return generatedKeys;
     }
 
     @Override
