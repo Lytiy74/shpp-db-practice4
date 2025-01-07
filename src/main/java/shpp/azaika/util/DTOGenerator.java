@@ -10,6 +10,7 @@ import shpp.azaika.dto.StockDTO;
 import shpp.azaika.dto.StoreDTO;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Random;
 import java.util.Set;
 
@@ -40,15 +41,15 @@ public class DTOGenerator {
         return categories;
     }
 
-    public Set<ProductDTO> generateProducts(int productsQty) {
+    public Set<ProductDTO> generateProducts(int productsQty, List<Long> categoriesIds) {
         Set<ProductDTO> products = new HashSet<>();
-        if (categoriesIds.length == 0) {
+        if (categoriesIds.isEmpty()) {
             log.warn("No categories id`s found. Generate categories first.");
             throw new IllegalStateException("No categories id`s found");
         }
 
         for (int i = 0; i < productsQty; i++) {
-            long randomCategoryId = categoriesIds[random.nextInt(categoriesIds.length)];
+            long randomCategoryId = categoriesIds.get(random.nextInt(categoriesIds.size()));
             ProductDTO product = faker.generateProductDTO(randomCategoryId);
             products.add(product);
         }
@@ -57,17 +58,17 @@ public class DTOGenerator {
         return products;
     }
 
-    public Set<StockDTO> generateStocks(int stockQty, int[] storesIds, int[] productsIds) {
+    public Set<StockDTO> generateStocks(int stockQty, List<Long> storesIds, List<Long> productsIds) {
         Set<StockDTO> stocks = new HashSet<>();
         Set<Pair<Long,Long>> stockKeys = new HashSet<>();
-        if (storesIds.length == 0|| productsIds.length == 0) {
+        if (storesIds.isEmpty()|| productsIds.isEmpty()) {
             log.warn("No stores or products found. Generate them first.");
             throw new IllegalStateException("No stores or products found");
         }
 
         for (int i = 0; i < stockQty; i++) {
-            long randomStoreId = storesIds[random.nextInt(storesIds.length)];
-            long randomProductId = productsIds[random.nextInt(productsIds.length)];
+            long randomStoreId = storesIds.get(random.nextInt(storesIds.size()));
+            long randomProductId = productsIds.get(random.nextInt(productsIds.size()));
             Pair<Long, Long> stockKey = Pair.of(randomStoreId, randomProductId);
             if (!stockKeys.contains(stockKey)) {
                 StockDTO stock = faker.generateStockDTO(randomStoreId, randomProductId);
