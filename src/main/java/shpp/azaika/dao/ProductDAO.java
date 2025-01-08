@@ -2,133 +2,55 @@ package shpp.azaika.dao;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import shpp.azaika.dto.CategoryDTO;
 import shpp.azaika.dto.ProductDTO;
 
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
-public class ProductDAO implements Dao<ProductDTO> {
+public class ProductDAO {
     private static final Logger log = LoggerFactory.getLogger(ProductDAO.class);
-    private final Connection connection;
 
-    private final List<ProductDTO> batch = new ArrayList<>();
+    private final Connection connection;
 
     public ProductDAO(Connection connection) {
         this.connection = connection;
-        log.info("ProductDAO initialized");
     }
 
-    @Override
-    public Optional<ProductDTO> get(long id) throws SQLException {
-        log.info("Get product with id {}", id);
-        String sql = "SELECT id, category_id, name, price FROM products WHERE id = ?";
-        try(PreparedStatement ps = connection.prepareStatement(sql)) {
-            ps.setLong(1, id);
-            try(ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    log.info("Found product with id {}", id);
-                    return Optional.of(new ProductDTO(rs.getLong("id"), rs.getLong("category_id"), rs.getString("name"), rs.getDouble("price")));
-                }
+    public List<Long> insertBatch(List<ProductDTO> dtos) {
+        String sql = "INSERT INTO products (name, category_id, price) VALUES (?,?,?)";
+        try (PreparedStatement stmt = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)){
+            for (ProductDTO dto : dtos) {
+                stmt.setString(1, dto.getName());
+                stmt.setLong(2, dto.getCategoryId());
+                stmt.setDouble(3, dto.getPrice());
+                stmt.addBatch();
             }
-        }
-        log.info("Product with id {} not found", id);
-        return Optional.empty();
-    }
-
-    @Override
-    public List<ProductDTO> getAll() throws SQLException {
-        log.info("Get all products");
-        String sql = "SELECT id, category_id, name, price FROM products";
-        List<ProductDTO> productDTOS = new ArrayList<>();
-        try(PreparedStatement ps = connection.prepareStatement(sql)) {
-            try(ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    productDTOS.add(new ProductDTO(rs.getLong("id"), rs.getLong("category_id"), rs.getString("name"), rs.getDouble("price")));
-                }
-            }
-        }
-        log.info("Found {} products dtos", productDTOS.size());
-        return productDTOS;
-    }
-
-    @Override
-    public void save(ProductDTO productDTO) throws SQLException {
-        log.info("Saving product {}", productDTO);
-        String sql = "INSERT INTO products (category_id, name, price) VALUES (?, ?, ?)";
-        try(PreparedStatement ps = connection.prepareStatement(sql)) {
-            ps.setLong(1, productDTO.getCategoryId());
-            ps.setString(2, productDTO.getName());
-            ps.setDouble(3, productDTO.getPrice());
-            ps.executeUpdate();
+            stmt.executeBatch();
+            connection.commit();
+            return retrieveIds(stmt.getGeneratedKeys());
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
         }
     }
 
-    @Override
-    public void update(ProductDTO productDTO) throws SQLException {
-        log.info("Updating product {}", productDTO);
-        String sql = "UPDATE products SET name = ?, price = ? WHERE id = ?";
-        try(PreparedStatement ps = connection.prepareStatement(sql)) {
-            ps.setString(1, productDTO.getName());
-            ps.setDouble(2, productDTO.getPrice());
-            ps.setLong(3, productDTO.getId());
-            ps.executeUpdate();
+    public List<Long> insertInChunks(List<ProductDTO> dtos, int chunkSize) {
+        int total = dtos.size();
+        List<Long> ids = new ArrayList<>();
+        for (int i = 0; i < total; i += chunkSize) {
+            int end = Math.min(i + chunkSize, total);
+            List<ProductDTO> chunk = dtos.subList(i, end);
+            ids.addAll(insertBatch(chunk));
         }
+        return ids;
     }
 
-    @Override
-    public void delete(long id) throws SQLException {
-        log.info("Deleting product with id {}", id);
-        String sql = "DELETE FROM products WHERE id = ?";
-        try(PreparedStatement ps = connection.prepareStatement(sql)) {
-            ps.setLong(1, id);
-            ps.executeUpdate();
+    private List<Long> retrieveIds(ResultSet generatedKeys) throws SQLException {
+        List<Long> ids = new ArrayList<>();
+        while (generatedKeys.next()){
+            ids.add(generatedKeys.getLong(1));
         }
-    }
-
-    @Override
-    public void addToBatch(ProductDTO dto){
-        batch.add(dto);
-    }
-
-    @Override
-    public List<Long> executeBatch() throws SQLException{
-        log.info("Execute batch");
-        String sql = "INSERT INTO products (name, category_id, price) VALUES (?, ?, ?)";
-        List<Long> generatedKeys = new ArrayList<>();
-        try(PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)){
-            for(ProductDTO dto : batch){
-                ps.setString(1, dto.getName());
-                ps.setLong(2, dto.getCategoryId());
-                ps.setDouble(3, dto.getPrice());
-                ps.addBatch();
-            }
-            ps.executeBatch();
-            ResultSet rs = ps.getGeneratedKeys();
-            while(rs.next()){
-                generatedKeys.add(rs.getLong(1));
-                log.debug("Generated key {}", rs.getLong(1));
-            }
-        }
-        batch.clear();
-        return generatedKeys;
-    }
-
-    @Override
-    public Optional<ProductDTO> findByName(String name) throws SQLException {
-        log.info("Find product by name '{}'", name);
-        String sql = "SELECT id, name, category_id, price FROM products WHERE name = ?";
-        try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setString(1, name);
-            try (ResultSet resultSet = statement.executeQuery()) {
-                if (resultSet.next()) {
-                    log.info("Product '{}' found", name);
-                    return Optional.of(new ProductDTO(resultSet.getLong("id"), resultSet.getLong("category_id"),resultSet.getString("name"), resultSet.getDouble("price")));
-                }
-            }
-        }
-        log.warn("Product '{}' not found", name);
-        return Optional.empty();
+        return ids;
     }
 }

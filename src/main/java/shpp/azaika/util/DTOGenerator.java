@@ -9,10 +9,7 @@ import shpp.azaika.dto.ProductDTO;
 import shpp.azaika.dto.StockDTO;
 import shpp.azaika.dto.StoreDTO;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Random;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.BlockingQueue;
 
 public class DTOGenerator {
@@ -22,8 +19,8 @@ public class DTOGenerator {
     private final DTOFaker faker = new DTOFaker();
     private final Random random = new Random();
 
-    public Set<StoreDTO> generateStores(int storesQty) {
-        Set<StoreDTO> stores = new HashSet<>();
+    public List<StoreDTO> generateStores(int storesQty) {
+        List<StoreDTO> stores = new ArrayList<>();
         for (int i = 0; i < storesQty; i++) {
             StoreDTO store = faker.generateStoreDTO();
             stores.add(store);
@@ -32,8 +29,9 @@ public class DTOGenerator {
         return stores;
     }
 
-    public Set<CategoryDTO> generateCategories(int categoryQty) {
-        Set<CategoryDTO> categories = new HashSet<>();
+    public List<CategoryDTO> generateCategories(int categoryQty) {
+        List<CategoryDTO> categories = new ArrayList<>() {
+        };
         for (int i = 0; i < categoryQty; i++) {
             CategoryDTO category = faker.generateCategoryDTO();
             categories.add(category);
@@ -42,8 +40,8 @@ public class DTOGenerator {
         return categories;
     }
 
-    public Set<ProductDTO> generateProducts(int productsQty, List<Long> categoriesIds) {
-        Set<ProductDTO> products = new HashSet<>();
+    public List<ProductDTO> generateProducts(int productsQty, List<Long> categoriesIds) {
+        List<ProductDTO> products = new ArrayList<>();
         if (categoriesIds.isEmpty()) {
             log.warn("No categories id`s found. Generate categories first.");
             throw new IllegalStateException("No categories id`s found");
@@ -59,8 +57,8 @@ public class DTOGenerator {
         return products;
     }
 
-    public Set<StockDTO> generateStocks(int stockQty, List<Long> storesIds, List<Long> productsIds) {
-        Set<StockDTO> stocks = new HashSet<>();
+    public List<StockDTO> generateStocks(int stockQty, List<Long> storesIds, List<Long> productsIds) {
+        List<StockDTO> stocks = new ArrayList<>();
         Set<Pair<Long,Long>> stockKeys = new HashSet<>();
         if (storesIds.isEmpty()|| productsIds.isEmpty()) {
             log.warn("No stores or products found. Generate them first.");
@@ -81,18 +79,5 @@ public class DTOGenerator {
         }
         return stocks;
     }
-
-    public void generateStoresToQueue(int storesQuantity, BlockingQueue<StoreDTO> storeDTOBlockingQueue) {
-        for (int i = 0; i < storesQuantity; i++) {
-            storeDTOBlockingQueue.add(faker.generateStoreDTO());
-        }
-    }
-
-    public void generateCategoriesToQueue(int categoriesQuantity, BlockingQueue<CategoryDTO> categoriesGeneratedQueue) {
-        for (int i = 0; i < categoriesQuantity; i++) {
-            categoriesGeneratedQueue.add(faker.generateCategoryDTO());
-        }
-    }
-
 
 }

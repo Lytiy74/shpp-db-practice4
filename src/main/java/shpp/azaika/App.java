@@ -1,5 +1,6 @@
 package shpp.azaika;
 
+import org.apache.commons.lang3.time.StopWatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import shpp.azaika.dao.CategoryDAO;
@@ -10,99 +11,101 @@ import shpp.azaika.dto.CategoryDTO;
 import shpp.azaika.dto.ProductDTO;
 import shpp.azaika.dto.StockDTO;
 import shpp.azaika.dto.StoreDTO;
-import shpp.azaika.util.BatchExecutor;
 import shpp.azaika.util.DTOGenerator;
 
 import java.io.IOException;
-import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.SQLException;
-import java.util.Optional;
+import java.util.List;
 import java.util.Properties;
-import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.Future;
 
 public class App {
     private static final Logger log = LoggerFactory.getLogger(App.class);
+    private static final int chunkSize = 3000;
 
 
-    public static void main(String[] args) throws IOException, SQLException {
+    public static void main(String[] args) throws IOException, SQLException, ExecutionException, InterruptedException {
         log.info("Starting application...");
+        StopWatch stopWatch = new StopWatch();
+        stopWatch.start();
+
         String productType = args.length > 0 ? args[0] : "Взуття";
 
         Properties generationProperties = new Properties();
         generationProperties.load(Thread.currentThread().getContextClassLoader().getResourceAsStream("generation.properties"));
+
         int storesQuantity = Integer.parseInt(generationProperties.getProperty("stores.quantity"));
         int categoriesQuantity = Integer.parseInt(generationProperties.getProperty("categories.quantity"));
         int productsQuantity = Integer.parseInt(generationProperties.getProperty("products.quantity"));
         int stocksQuantity = Integer.parseInt(generationProperties.getProperty("stock.quantity"));
 
-        Properties dbProperties = new Properties();
-        dbProperties.load(Thread.currentThread().getContextClassLoader().getResourceAsStream("db.properties"));
+        DataSource dataSource = DataSource.getInstance();
+        DTOGenerator dtoGenerator = new DTOGenerator();
 
-        try (Connection connection = DriverManager.getConnection(
-                dbProperties.getProperty("db.url"), dbProperties.getProperty("db.user"), dbProperties.getProperty("db.password"));
-             ExecutorService generatorExecutorService = Executors.newFixedThreadPool(2);
-             ExecutorService daoExecutorService = Executors.newFixedThreadPool(2)){
-            log.info("Generating {} stores, {} categories, {} products and {} stocks...", storesQuantity, categoriesQuantity, productsQuantity, stocksQuantity);
+        ExecutorService executorService = Executors.newFixedThreadPool(10);
 
-            DTOGenerator generator = new DTOGenerator();
+        stopWatch.reset();
+        stopWatch.start();
+        List<StoreDTO> storeDTOS = dtoGenerator.generateStores(storesQuantity);
+        stopWatch.stop();
+        log.info("Generated stores in {} ms", stopWatch.getTime());
 
-            BlockingQueue<CategoryDTO> categoriesGeneratedQueue = new LinkedBlockingQueue<>();
-            BlockingQueue<StoreDTO> storesGeneratedQueue = new LinkedBlockingQueue<>();
-            BlockingQueue<ProductDTO> productsGeneratedQueue = new LinkedBlockingQueue<>();
-            BlockingQueue<StockDTO> stocksGeneratedQueue = new LinkedBlockingQueue<>();
-            BlockingQueue<Long> storesIds  = new LinkedBlockingQueue<>();
-            BlockingQueue<Long> categoriesIds  = new LinkedBlockingQueue<>();
-            BlockingQueue<Long> productsIds  = new LinkedBlockingQueue<>();
-            BlockingQueue<Long> stocksIds  = new LinkedBlockingQueue<>();
+        StoreDAO storeDAO = new StoreDAO(dataSource.getConnection());
+        stopWatch.reset();
+        stopWatch.start();
+        Future<List<Long>> storeInsertTask = executorService.submit(() -> storeDAO.insertInChunks(storeDTOS, chunkSize));
+        List<Long> storeIds = storeInsertTask.get();
+        stopWatch.stop();
+        log.info("Inserted stores in DB in {} ms", stopWatch.getTime());
 
-            CategoryDAO categoryDAO = new CategoryDAO(connection);
-            StoreDAO storeDAO = new StoreDAO(connection);
-            ProductDAO productDAO = new ProductDAO(connection);
-            StockDAO stockDAO = new StockDAO(connection);
+        stopWatch.reset();
+        stopWatch.start();
+        List<CategoryDTO> categoryDTOS = dtoGenerator.generateCategories(categoriesQuantity);
+        stopWatch.stop();
+        log.info("Generated categories in {} ms", stopWatch.getTime());
 
-            generatorExecutorService.submit(() -> {
-                generator.generateCategoriesToQueue(categoriesQuantity, categoriesGeneratedQueue);
-            });
+        CategoryDAO categoryDAO = new CategoryDAO(dataSource.getConnection());
+        stopWatch.reset();
+        stopWatch.start();
+        Future<List<Long>> categoryInsertTask = executorService.submit(() -> categoryDAO.insertInChunks(categoryDTOS, chunkSize));
+        List<Long> categoryIds = categoryInsertTask.get();
+        stopWatch.stop();
+        log.info("Inserted categories in DB in {} ms", stopWatch.getTime());
 
-            generatorExecutorService.submit(() -> {
-                generator.generateStoresToQueue(storesQuantity, storesGeneratedQueue);
-            });
+        stopWatch.reset();
+        stopWatch.start();
+        List<ProductDTO> productDTOS = dtoGenerator.generateProducts(productsQuantity, categoryIds);
+        stopWatch.stop();
+        log.info("Generated products in {} ms", stopWatch.getTime());
 
-            BatchExecutor<CategoryDTO> categoryDTOBatchExecutor = new BatchExecutor<>(categoriesGeneratedQueue, categoriesIds, categoryDAO, 1000);
-            daoExecutorService.submit(categoryDTOBatchExecutor);
+        ProductDAO productDAO = new ProductDAO(dataSource.getConnection());
+        stopWatch.reset();
+        stopWatch.start();
+        Future<List<Long>> productInsertTask = executorService.submit(() -> productDAO.insertInChunks(productDTOS, chunkSize));
+        List<Long> productIds = productInsertTask.get();
+        stopWatch.stop();
+        log.info("Inserted products in DB in {} ms", stopWatch.getTime());
 
-            BatchExecutor<StoreDTO> storeDTOBatchExecutor = new BatchExecutor<>(storesGeneratedQueue, storesIds, storeDAO, 1000);
-            daoExecutorService.submit(storeDTOBatchExecutor);
+        stopWatch.reset();
+        stopWatch.start();
+        List<StockDTO> stockDTOS = dtoGenerator.generateStocks(stocksQuantity, storeIds, productIds);
+        stopWatch.stop();
+        log.info("Generated stocks in {} ms", stopWatch.getTime());
 
-            //Генерувати продукти і стоки потрібно лише після пушу магазинів та категорії на бд, щоб отримати індекси
+        StockDAO stockDAO = new StockDAO(dataSource.getConnection());
+        stopWatch.reset();
+        stopWatch.start();
+        Future<List<Long>> stockInsertTask = executorService.submit(() -> stockDAO.insertInChunks(stockDTOS, chunkSize));
+        List<Long> stockIds = stockInsertTask.get();
+        stopWatch.stop();
+        log.info("Inserted stocks in DB in {} ms", stopWatch.getTime());
 
-
-
-        } catch (SQLException e) {
-            log.error("Database error occurred", e);
-        }
+        executorService.shutdown();
+        log.info("Application finished in {} ms", stopWatch.getTime());
     }
 
-    private static String getStoreWithMostProductsOfType(CategoryDAO categoryDAO, StockDAO stockDAO, String productType) throws SQLException {
-
-        Optional<CategoryDTO> categoryOptional = categoryDAO.findByName(productType);
-        if (categoryOptional.isEmpty()) {
-            log.error("Category not found.");
-            return "";
-        }
-        CategoryDTO category = categoryOptional.get();
-
-        Optional<StoreDTO> storeOptional = stockDAO.findStoreWithMostProductsByCategory(category.getId());
-        if (storeOptional.isEmpty()) {
-            log.error("No store found with products of type {}.", productType);
-            return "";
-        }
-        StoreDTO storeWithMostProducts = storeOptional.get();
-        return storeWithMostProducts.toString();
-    }
 
 }
