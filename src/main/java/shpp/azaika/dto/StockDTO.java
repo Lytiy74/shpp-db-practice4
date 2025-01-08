@@ -1,8 +1,11 @@
 package shpp.azaika.dto;
 
+import jakarta.validation.constraints.PositiveOrZero;
+
 public class StockDTO {
     private final long shopId;
     private final long productId;
+    @PositiveOrZero
     private final long quantity;
 
     public StockDTO(long shopId, long productId, long quantity) {

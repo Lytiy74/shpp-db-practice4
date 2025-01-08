@@ -1,7 +1,10 @@
 package shpp.azaika.dto;
 
+import org.hibernate.validator.constraints.Length;
+
 public class StoreDTO {
     private long id;
+    @Length(min = 5, max = 255)
     private String address;
 
     public StoreDTO(long id, String address) {
