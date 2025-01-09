@@ -59,24 +59,29 @@ public class DTOGenerator {
 
     public List<StockDTO> generateStocks(int stockQty, List<Long> storesIds, List<Long> productsIds) {
         List<StockDTO> stocks = new ArrayList<>();
-        Set<Pair<Long,Long>> stockKeys = new HashSet<>();
-        if (storesIds.isEmpty()|| productsIds.isEmpty()) {
+
+        if (storesIds.isEmpty() || productsIds.isEmpty()) {
             log.warn("No stores or products found. Generate them first.");
             throw new IllegalStateException("No stores or products found");
         }
 
-        for (int i = 0; i < stockQty; i++) {
-            long randomStoreId = storesIds.get(random.nextInt(storesIds.size()));
-            long randomProductId = productsIds.get(random.nextInt(productsIds.size()));
-            Pair<Long, Long> stockKey = Pair.of(randomStoreId, randomProductId);
-            if (!stockKeys.contains(stockKey)) {
-                StockDTO stock = faker.generateStockDTO(randomStoreId, randomProductId);
-                stocks.add(stock);
-                stockKeys.add(stockKey);
-            } else {
-                i--;
+        List<Pair<Long, Long>> allCombinations = new ArrayList<>();
+        for (Long storeId : storesIds) {
+            for (Long productId : productsIds) {
+                allCombinations.add(Pair.of(storeId, productId));
             }
         }
+
+        Collections.shuffle(allCombinations, random);
+
+        int limit = Math.min(stockQty, allCombinations.size());
+        for (int i = 0; i < limit; i++) {
+            Pair<Long, Long> stockKey = allCombinations.get(i);
+            StockDTO stock = faker.generateStockDTO(stockKey.getLeft(), stockKey.getRight());
+            stocks.add(stock);
+        }
+
+        log.info("Generated {} stocks", stocks.size());
         return stocks;
     }
 
