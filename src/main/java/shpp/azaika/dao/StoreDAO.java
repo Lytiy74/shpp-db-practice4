@@ -18,7 +18,7 @@ public class StoreDAO {
     }
 
 
-    public List<Long> insertBatch(List<StoreDTO> dtos) {
+    public List<Short> insertBatch(List<StoreDTO> dtos) {
         String sql = "INSERT INTO stores (address) VALUES (?)";
         try (PreparedStatement stmt = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)){
             for (StoreDTO dto : dtos) {
@@ -33,9 +33,9 @@ public class StoreDAO {
         }
     }
 
-    public List<Long> insertInChunks(List<StoreDTO> dtos, int chunkSize) {
+    public List<Short> insertInChunks(List<StoreDTO> dtos, int chunkSize) {
         int total = dtos.size();
-        List<Long> ids = new ArrayList<>();
+        List<Short> ids = new ArrayList<>();
         for (int i = 0; i < total; i += chunkSize) {
             int end = Math.min(i + chunkSize, total);
             List<StoreDTO> chunk = dtos.subList(i, end);
@@ -44,10 +44,10 @@ public class StoreDAO {
         return ids;
     }
 
-    private List<Long> retrieveIds(ResultSet generatedKeys) throws SQLException {
-        List<Long> ids = new ArrayList<>();
+    private List<Short> retrieveIds(ResultSet generatedKeys) throws SQLException {
+        List<Short> ids = new ArrayList<>();
         while (generatedKeys.next()){
-            ids.add(generatedKeys.getLong(1));
+            ids.add(generatedKeys.getShort(1));
         }
         return ids;
     }

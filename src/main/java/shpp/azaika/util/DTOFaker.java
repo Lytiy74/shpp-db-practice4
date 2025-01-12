@@ -40,7 +40,7 @@ public class DTOFaker {
         return category;
     }
 
-    public ProductDTO generateProductDTO(long categoryId) {
+    public ProductDTO generateProductDTO(short categoryId) {
         String productName = threadLocalFaker.get().commerce().productName();
         long price = threadLocalFaker.get().number().numberBetween(MIN_PRICE, MAX_PRICE);
         ProductDTO product = new ProductDTO(categoryId, productName, price);
@@ -48,8 +48,8 @@ public class DTOFaker {
         return product;
     }
 
-    public StockDTO generateStockDTO(long storeId, long productId) {
-        long quantity = threadLocalFaker.get().number().numberBetween(1, MAX_STOCK_QUANTITY);
+    public StockDTO generateStockDTO(short storeId, short productId) {
+        short quantity = (short) threadLocalFaker.get().number().numberBetween(1, MAX_STOCK_QUANTITY);
         StockDTO stock = new StockDTO(storeId, productId, quantity);
         log.debug("Generated Stock: {}", stock);
         return stock;

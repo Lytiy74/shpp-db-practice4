@@ -40,7 +40,7 @@ public class DTOGenerator {
         return categories;
     }
 
-    public List<ProductDTO> generateProducts(int productsQty, List<Long> categoriesIds) {
+    public List<ProductDTO> generateProducts(int productsQty, List<Short> categoriesIds) {
         List<ProductDTO> products = new ArrayList<>();
         if (categoriesIds.isEmpty()) {
             log.warn("No categories id`s found. Generate categories first.");
@@ -48,7 +48,7 @@ public class DTOGenerator {
         }
 
         for (int i = 0; i < productsQty; i++) {
-            long randomCategoryId = categoriesIds.get(random.nextInt(categoriesIds.size()));
+            short randomCategoryId = categoriesIds.get(random.nextInt(categoriesIds.size()));
             ProductDTO product = faker.generateProductDTO(randomCategoryId);
             products.add(product);
         }
@@ -57,7 +57,7 @@ public class DTOGenerator {
         return products;
     }
 
-    public List<StockDTO> generateStocks(int stockQty, List<Long> storesIds, List<Long> productsIds) {
+    public List<StockDTO> generateStocks(int stockQty, List<Short> storesIds, List<Short> productsIds) {
         List<StockDTO> stocks = new ArrayList<>();
 
         if (storesIds.isEmpty() || productsIds.isEmpty()) {
@@ -65,9 +65,9 @@ public class DTOGenerator {
             throw new IllegalStateException("No stores or products found");
         }
 
-        List<Pair<Long, Long>> allCombinations = new ArrayList<>();
-        for (Long storeId : storesIds) {
-            for (Long productId : productsIds) {
+        List<Pair<Short, Short>> allCombinations = new ArrayList<>();
+        for (Short storeId : storesIds) {
+            for (Short productId : productsIds) {
                 allCombinations.add(Pair.of(storeId, productId));
             }
         }
@@ -76,7 +76,7 @@ public class DTOGenerator {
 
         int limit = Math.min(stockQty, allCombinations.size());
         for (int i = 0; i < limit; i++) {
-            Pair<Long, Long> stockKey = allCombinations.get(i);
+            Pair<Short, Short> stockKey = allCombinations.get(i);
             StockDTO stock = faker.generateStockDTO(stockKey.getLeft(), stockKey.getRight());
             stocks.add(stock);
         }

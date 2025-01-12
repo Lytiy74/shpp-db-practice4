@@ -18,12 +18,12 @@ public class ProductDAO {
         this.connection = connection;
     }
 
-    public List<Long> insertBatch(List<ProductDTO> dtos) {
+    public List<Short> insertBatch(List<ProductDTO> dtos) {
         String sql = "INSERT INTO products (name, category_id, price) VALUES (?,?,?)";
         try (PreparedStatement stmt = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)){
             for (ProductDTO dto : dtos) {
                 stmt.setString(1, dto.getName());
-                stmt.setLong(2, dto.getCategoryId());
+                stmt.setShort(2, dto.getId());
                 stmt.setDouble(3, dto.getPrice());
                 stmt.addBatch();
             }
@@ -35,9 +35,9 @@ public class ProductDAO {
         }
     }
 
-    public List<Long> insertInChunks(List<ProductDTO> dtos, int chunkSize) {
+    public List<Short> insertInChunks(List<ProductDTO> dtos, int chunkSize) {
         int total = dtos.size();
-        List<Long> ids = new ArrayList<>();
+        List<Short> ids = new ArrayList<>();
         for (int i = 0; i < total; i += chunkSize) {
             int end = Math.min(i + chunkSize, total);
             List<ProductDTO> chunk = dtos.subList(i, end);
@@ -46,10 +46,10 @@ public class ProductDAO {
         return ids;
     }
 
-    private List<Long> retrieveIds(ResultSet generatedKeys) throws SQLException {
-        List<Long> ids = new ArrayList<>();
+    private List<Short> retrieveIds(ResultSet generatedKeys) throws SQLException {
+        List<Short> ids = new ArrayList<>();
         while (generatedKeys.next()){
-            ids.add(generatedKeys.getLong(1));
+            ids.add(generatedKeys.getShort(1));
         }
         return ids;
     }

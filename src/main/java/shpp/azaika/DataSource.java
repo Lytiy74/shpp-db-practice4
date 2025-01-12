@@ -11,12 +11,12 @@ import java.util.Properties;
 public class DataSource {
     private static DataSource instance;
 
-    private HikariConfig config = new HikariConfig();
-    private HikariDataSource dataSource;
+    private final HikariDataSource dataSource;
 
     private DataSource() throws IOException {
         Properties properties = new Properties();
         properties.load(Thread.currentThread().getContextClassLoader().getResourceAsStream("db.properties"));
+        HikariConfig config = new HikariConfig();
         config.setJdbcUrl(properties.getProperty("jdbc.url"));
         config.setUsername(properties.getProperty("jdbc.username"));
         config.setPassword(properties.getProperty("jdbc.password"));

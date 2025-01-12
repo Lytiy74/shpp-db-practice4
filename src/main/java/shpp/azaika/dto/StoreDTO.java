@@ -3,11 +3,11 @@ package shpp.azaika.dto;
 import org.hibernate.validator.constraints.Length;
 
 public class StoreDTO {
-    private long id;
+    private short id;
     @Length(min = 5, max = 255)
     private String address;
 
-    public StoreDTO(long id, String address) {
+    public StoreDTO(short id, String address) {
         this.id = id;
         this.address = address;
     }
@@ -16,7 +16,7 @@ public class StoreDTO {
         this.address = address;
     }
 
-    public long getId() {
+    public short getId() {
         return id;
     }
 
@@ -24,7 +24,7 @@ public class StoreDTO {
         return address;
     }
 
-    public void setId(long id) {
+    public void setId(short id) {
         this.id = id;
     }
 

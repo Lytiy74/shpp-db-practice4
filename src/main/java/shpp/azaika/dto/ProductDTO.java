@@ -1,31 +1,30 @@
 package shpp.azaika.dto;
 
-import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Positive;
 import org.hibernate.validator.constraints.Length;
 
 public class ProductDTO {
-    private long id;
-    private final long categoryId;
+    private short id;
+    private final short categoryId;
     @Length(min = 5, max = 255)
     private final String name;
     @Positive
     private final double price;
 
-    public ProductDTO(long id, long categoryId, String name, double price) {
+    public ProductDTO(short id, short categoryId, String name, double price) {
         this.id = id;
         this.categoryId = categoryId;
         this.name = name;
         this.price = price;
     }
 
-    public ProductDTO(long categoryId, String name, double price) {
+    public ProductDTO(short categoryId, String name, double price) {
         this.categoryId = categoryId;
         this.name = name;
         this.price = price;
     }
 
-    public long getId() {
+    public short getId() {
         return id;
     }
 
@@ -37,7 +36,7 @@ public class ProductDTO {
         return price;
     }
 
-    public long getCategoryId() {
+    public short getCategoryId() {
         return categoryId;
     }
 

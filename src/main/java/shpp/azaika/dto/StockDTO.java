@@ -3,26 +3,26 @@ package shpp.azaika.dto;
 import jakarta.validation.constraints.PositiveOrZero;
 
 public class StockDTO {
-    private final long shopId;
-    private final long productId;
+    private final short shopId;
+    private final short productId;
     @PositiveOrZero
-    private final long quantity;
+    private final int quantity;
 
-    public StockDTO(long shopId, long productId, long quantity) {
+    public StockDTO(short shopId, short productId, int quantity) {
         this.shopId = shopId;
         this.productId = productId;
         this.quantity = quantity;
     }
 
-    public long getShopId() {
+    public short getShopId() {
         return shopId;
     }
 
-    public long getProductId() {
+    public short getProductId() {
         return productId;
     }
 
-    public long getQuantity() {
+    public int getQuantity() {
         return quantity;
     }
 

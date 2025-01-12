@@ -14,6 +14,8 @@ import shpp.azaika.dto.StoreDTO;
 import shpp.azaika.util.DTOGenerator;
 
 import java.io.IOException;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Properties;
@@ -24,10 +26,11 @@ import java.util.concurrent.Future;
 
 public class App {
     private static final Logger log = LoggerFactory.getLogger(App.class);
-    private static final int chunkSize = 3000;
+    private static final int CHUNK_SIZE = 3000;
 
     public static void main(String[] args) throws IOException, SQLException, ExecutionException, InterruptedException {
         log.info("Starting application...");
+
         StopWatch stopWatch = new StopWatch();
         stopWatch.start();
 
@@ -44,6 +47,8 @@ public class App {
         DataSource dataSource = DataSource.getInstance();
         DTOGenerator dtoGenerator = new DTOGenerator();
 
+        dropAndCreateTable(dataSource.getConnection());
+
         ExecutorService executorService = Executors.newFixedThreadPool(10);
 
         stopWatch.reset();
@@ -55,8 +60,8 @@ public class App {
         StoreDAO storeDAO = new StoreDAO(dataSource.getConnection());
         stopWatch.reset();
         stopWatch.start();
-        Future<List<Long>> storeInsertTask = executorService.submit(() -> storeDAO.insertInChunks(storeDTOS, chunkSize));
-        List<Long> storeIds = storeInsertTask.get();
+        Future<List<Short>> storeInsertTask = executorService.submit(() -> storeDAO.insertInChunks(storeDTOS, CHUNK_SIZE));
+        List<Short> storeIds = storeInsertTask.get();
         stopWatch.stop();
         log.info("Inserted stores in DB in {} ms", stopWatch.getDuration().toMillis());
 
@@ -69,8 +74,8 @@ public class App {
         CategoryDAO categoryDAO = new CategoryDAO(dataSource.getConnection());
         stopWatch.reset();
         stopWatch.start();
-        Future<List<Long>> categoryInsertTask = executorService.submit(() -> categoryDAO.insertInChunks(categoryDTOS, chunkSize));
-        List<Long> categoryIds = categoryInsertTask.get();
+        Future<List<Short>> categoryInsertTask = executorService.submit(() -> categoryDAO.insertInChunks(categoryDTOS, CHUNK_SIZE));
+        List<Short> categoryIds = categoryInsertTask.get();
         stopWatch.stop();
         log.info("Inserted categories in DB in {} ms", stopWatch.getDuration().toMillis());
 
@@ -83,8 +88,8 @@ public class App {
         ProductDAO productDAO = new ProductDAO(dataSource.getConnection());
         stopWatch.reset();
         stopWatch.start();
-        Future<List<Long>> productInsertTask = executorService.submit(() -> productDAO.insertInChunks(productDTOS, chunkSize));
-        List<Long> productIds = productInsertTask.get();
+        Future<List<Short>> productInsertTask = executorService.submit(() -> productDAO.insertInChunks(productDTOS, CHUNK_SIZE));
+        List<Short> productIds = productInsertTask.get();
         stopWatch.stop();
         log.info("Inserted products in DB in {} ms", stopWatch.getDuration().toMillis());
 
@@ -97,10 +102,10 @@ public class App {
         StockDAO stockDAO = new StockDAO(dataSource.getConnection());
         stopWatch.reset();
         stopWatch.start();
-        for (int i = 0; i < stockDTOS.size(); i += chunkSize) {
-            int end = Math.min(i + chunkSize, stockDTOS.size());
+        for (int i = 0; i < stockDTOS.size(); i += CHUNK_SIZE) {
+            int end = Math.min(i + CHUNK_SIZE, stockDTOS.size());
             List<StockDTO> chunk = stockDTOS.subList(i, end);
-            stockDAO.insertInChunks(chunk, chunkSize);
+            stockDAO.insertInChunks(chunk, CHUNK_SIZE);
             log.info("Inserted {} stocks",i);
         }
         stopWatch.stop();
@@ -108,5 +113,67 @@ public class App {
 
         executorService.shutdown();
         log.info("Application finished in {} ms", stopWatch.getDuration().toMillis());
+    }
+
+    public static void dropAndCreateTable(Connection connection){
+        String sql = """
+                DROP TABLE IF EXISTS stock,products,categories,stores;
+                create table categories
+                (
+                    id   smallint default nextval('categories_id_seq'::regclass) not null
+                        primary key,
+                    name varchar(255)                                            not null
+                );
+                
+                alter table categories
+                    owner to postgres;
+                
+                create table products
+                (
+                    id          smallint default nextval('products_id_seq'::regclass) not null
+                        primary key,
+                    name        varchar(255)                                          not null,
+                    category_id smallint                                              not null
+                        constraint products_category_id_foreign
+                            references categories,
+                    price       numeric                                               not null
+                );
+                
+                alter table products
+                    owner to postgres;
+                
+                create table stores
+                (
+                    id      smallint default nextval('stores_id_seq'::regclass) not null
+                        primary key,
+                    address varchar(255)                                        not null
+                );
+                
+                alter table stores
+                    owner to postgres;
+                
+                create table stocks
+                (
+                    shop_id    smallint not null
+                        constraint stock_shop_id_foreign
+                            references stores,
+                    product_id smallint not null
+                        constraint stock_product_id_foreign
+                            references products,
+                    quantity   integer  not null,
+                    constraint stock_pkey
+                        primary key (shop_id, product_id)
+                );
+                
+                alter table stocks
+                    owner to postgres;
+                
+                """;
+        try(PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.execute();
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+
     }
 }

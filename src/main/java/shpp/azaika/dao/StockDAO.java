@@ -18,13 +18,13 @@ public class StockDAO {
         this.connection = connection;
     }
 
-    public List<Long> insertBatch(List<StockDTO> dtos) {
-        String sql = "INSERT INTO stock (shop_id, product_id, quantity) VALUES (?,?,?)";
+    public List<Short> insertBatch(List<StockDTO> dtos) {
+        String sql = "INSERT INTO stocks (shop_id, product_id, quantity) VALUES (?,?,?)";
         try (PreparedStatement stmt = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)){
             for (StockDTO dto : dtos) {
-                stmt.setLong(1, dto.getShopId());
-                stmt.setLong(2, dto.getProductId());
-                stmt.setLong(3, dto.getQuantity());
+                stmt.setShort(1, dto.getShopId());
+                stmt.setShort(2, dto.getProductId());
+                stmt.setInt(3, dto.getQuantity());
                 stmt.addBatch();
             }
             stmt.executeBatch();
@@ -35,9 +35,9 @@ public class StockDAO {
         }
     }
 
-    public List<Long> insertInChunks(List<StockDTO> dtos, int chunkSize) {
+    public List<Short> insertInChunks(List<StockDTO> dtos, int chunkSize) {
         int total = dtos.size();
-        List<Long> ids = new ArrayList<>();
+        List<Short> ids = new ArrayList<>();
         for (int i = 0; i < total; i += chunkSize) {
             int end = Math.min(i + chunkSize, total);
             List<StockDTO> chunk = dtos.subList(i, end);
@@ -46,10 +46,10 @@ public class StockDAO {
         return ids;
     }
 
-    private List<Long> retrieveIds(ResultSet generatedKeys) throws SQLException {
-        List<Long> ids = new ArrayList<>();
+    private List<Short> retrieveIds(ResultSet generatedKeys) throws SQLException {
+        List<Short> ids = new ArrayList<>();
         while (generatedKeys.next()){
-            ids.add(generatedKeys.getLong(1));
+            ids.add(generatedKeys.getShort(1));
         }
         return ids;
     }
