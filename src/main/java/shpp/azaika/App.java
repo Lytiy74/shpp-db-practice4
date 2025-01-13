@@ -27,7 +27,8 @@ import java.util.concurrent.Future;
 
 public class App {
     private static final Logger log = LoggerFactory.getLogger(App.class);
-    private static final int CHUNK_SIZE = 10000;
+    private static final int CHUNK_SIZE = 3000;
+    private static List<Short> ids;
 
     public static void main(String[] args) throws IOException, SQLException, ExecutionException, InterruptedException {
         log.info("Starting application...");
@@ -35,146 +36,112 @@ public class App {
         StopWatch stopWatch = new StopWatch();
         stopWatch.start();
 
-        String productType = args.length > 0 ? args[0] : "Взуття";
-
-        Properties generationProperties = new Properties();
-        generationProperties.load(Thread.currentThread().getContextClassLoader().getResourceAsStream("generation.properties"));
-
-        int storesQuantity = Integer.parseInt(generationProperties.getProperty("stores.quantity"));
-        int categoriesQuantity = Integer.parseInt(generationProperties.getProperty("categories.quantity"));
-        int productsQuantity = Integer.parseInt(generationProperties.getProperty("products.quantity"));
-        int stocksQuantity = Integer.parseInt(generationProperties.getProperty("stock.quantity"));
+        String productType = getProductTypeFromArgs(args);
+        Properties generationProperties = loadGenerationProperties();
 
         DataSource dataSource = DataSource.getInstance();
         DTOGenerator dtoGenerator = new DTOGenerator();
 
-        dropAndCreateTable(dataSource.getConnection());
+        dropAndCreateTables(dataSource.getConnection());
 
         ExecutorService executorService = Executors.newFixedThreadPool(10);
 
-        stopWatch.reset();
-        stopWatch.start();
-        List<StoreDTO> storeDTOS = dtoGenerator.generateAndValidateStores(storesQuantity);
-        stopWatch.stop();
-        log.info("Generated stores in {} ms", stopWatch.getDuration().toMillis());
+        List<Short> storeIds = generateAndInsertStores(dtoGenerator, generationProperties, executorService, dataSource);
+        List<Short> categoryIds = generateAndInsertCategories(dtoGenerator, generationProperties, executorService, dataSource);
+        List<Short> productIds = generateAndInsertProducts(dtoGenerator, generationProperties, categoryIds, executorService, dataSource);
 
-        StoreDAO storeDAO = new StoreDAO(dataSource.getConnection());
-        stopWatch.reset();
-        stopWatch.start();
-        Future<List<Short>> storeInsertTask = executorService.submit(() -> storeDAO.insertInChunks(storeDTOS, CHUNK_SIZE));
-        List<Short> storeIds = storeInsertTask.get();
-        stopWatch.stop();
-        log.info("Inserted stores in DB in {} ms", stopWatch.getDuration().toMillis());
+        generateAndInsertStockData(storeIds, productIds, generationProperties, dataSource);
 
-        stopWatch.reset();
-        stopWatch.start();
-        List<CategoryDTO> categoryDTOS = dtoGenerator.generateAndValidateCategories(categoriesQuantity);
-        stopWatch.stop();
-        log.info("Generated categories in {} ms", stopWatch.getDuration().toMillis());
+        String storeWithMostProductsOfType = getStoreWithMostProductsOfType(productType, new CategoryDAO(dataSource.getConnection()), new StockDAO(dataSource.getConnection()));
+        log.info("Store with most products of type {}: {}", productType, storeWithMostProductsOfType);
 
-        CategoryDAO categoryDAO = new CategoryDAO(dataSource.getConnection());
-        stopWatch.reset();
-        stopWatch.start();
-        Future<List<Short>> categoryInsertTask = executorService.submit(() -> categoryDAO.insertInChunks(categoryDTOS, CHUNK_SIZE));
-        List<Short> categoryIds = categoryInsertTask.get();
-        stopWatch.stop();
-        log.info("Inserted categories in DB in {} ms", stopWatch.getDuration().toMillis());
-
-        stopWatch.reset();
-        stopWatch.start();
-        List<ProductDTO> productDTOS = dtoGenerator.generateAndValidateProducts(productsQuantity, categoryIds);
-        stopWatch.stop();
-        log.info("Generated products in {} ms", stopWatch.getDuration().toMillis());
-
-        ProductDAO productDAO = new ProductDAO(dataSource.getConnection());
-        stopWatch.reset();
-        stopWatch.start();
-        Future<List<Short>> productInsertTask = executorService.submit(() -> productDAO.insertInChunks(productDTOS, CHUNK_SIZE));
-        List<Short> productIds = productInsertTask.get();
-        stopWatch.stop();
-        log.info("Inserted products in DB in {} ms", stopWatch.getDuration().toMillis());
-
-        StockDAO stockDAO = new StockDAO(dataSource.getConnection());
-        stopWatch.reset();
-        stopWatch.start();
-        StockGenerator stockGenerator = new StockGenerator(storeIds, productIds, stockDAO);
-        stockGenerator.generateAndInsertStocks(stocksQuantity, CHUNK_SIZE, 3);
-        stopWatch.stop();
-        log.info("Inserted stocks in DB in {} ms", stopWatch.getDuration().toMillis());
-        String storeWithMostProductsOfType = getStoreWithMostProductsOfType(productType, categoryDAO, stockDAO);
-        log.info("Store with most products of type {}", storeWithMostProductsOfType);
         executorService.shutdown();
         log.info("Application finished in {} ms", stopWatch.getDuration().toMillis());
     }
 
-    public static void dropAndCreateTable(Connection connection){
-        String sql = """
-                DROP TABLE IF EXISTS stocks;
-                DROP TABLE IF EXISTS products;
-                DROP TABLE IF EXISTS categories;
-                DROP TABLE IF EXISTS stores;
-                create table categories
-                (
-                    id   smallserial not null
-                        primary key,
-                    name varchar(255)                                            not null
-                );
-                
-                alter table categories
-                    owner to postgres;
-                
-                create table products
-                (
-                    id          smallserial not null
-                        primary key,
-                    name        varchar(255)                                          not null,
-                    category_id smallint                                              not null
-                        constraint products_category_id_foreign
-                            references categories,
-                    price       numeric                                               not null
-                );
-                
-                alter table products
-                    owner to postgres;
-                
-                create table stores
-                (
-                    id      smallserial not null
-                        primary key,
-                    address varchar(255)                                        not null
-                );
-                
-                alter table stores
-                    owner to postgres;
-                
-                create table stocks
-                (
-                    shop_id    smallint not null
-                        constraint stock_shop_id_foreign
-                            references stores,
-                    product_id smallint not null
-                        constraint stock_product_id_foreign
-                            references products,
-                    quantity   integer  not null,
-                    constraint stock_pkey
-                        primary key (shop_id, product_id)
-                );
-                
-                alter table stocks
-                    owner to postgres;
-                
-                """;
-        try(PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.execute();
-            connection.commit();
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
+    private static String getProductTypeFromArgs(String[] args) {
+        return args.length > 0 ? args[0] : "Взуття";
+    }
+
+    private static Properties loadGenerationProperties() throws IOException {
+        Properties generationProperties = new Properties();
+        generationProperties.load(Thread.currentThread().getContextClassLoader().getResourceAsStream("generation.properties"));
+        return generationProperties;
+    }
+
+    private static List<Short> generateAndInsertStores(DTOGenerator dtoGenerator, Properties generationProperties, ExecutorService executorService, DataSource dataSource) throws InterruptedException, ExecutionException, SQLException {
+        StopWatch stopWatch = new StopWatch();
+        stopWatch.start();
+        List<StoreDTO> storeDTOS = dtoGenerator.generateAndValidateStores(Integer.parseInt(generationProperties.getProperty("stores.quantity")));
+        stopWatch.stop();
+        log.info("Generated stores in {} ms", stopWatch.getDuration().toMillis());
+
+        List<Short> ids;
+        try (Connection connection = dataSource.getConnection()) {
+            StoreDAO storeDAO = new StoreDAO(connection);
+            stopWatch.reset();
+            stopWatch.start();
+            Future<List<Short>> storeInsertTask = executorService.submit(() -> storeDAO.insertInChunks(storeDTOS, CHUNK_SIZE));
+            ids = storeInsertTask.get();
+            stopWatch.stop();
+            log.info("Inserted stores in DB in {} ms", stopWatch.getDuration().toMillis());
         }
 
+        return ids;
+    }
+
+    private static List<Short> generateAndInsertCategories(DTOGenerator dtoGenerator, Properties generationProperties, ExecutorService executorService, DataSource dataSource) throws InterruptedException, ExecutionException, SQLException {
+        StopWatch stopWatch = new StopWatch();
+        stopWatch.start();
+        List<CategoryDTO> categoryDTOS = dtoGenerator.generateAndValidateCategories(Integer.parseInt(generationProperties.getProperty("categories.quantity")));
+        stopWatch.stop();
+        log.info("Generated categories in {} ms", stopWatch.getDuration().toMillis());
+
+        List<Short> ids;
+        try (Connection connection = dataSource.getConnection()) {
+            CategoryDAO categoryDAO = new CategoryDAO(connection);
+            stopWatch.reset();
+            stopWatch.start();
+            Future<List<Short>> categoryInsertTask = executorService.submit(() -> categoryDAO.insertInChunks(categoryDTOS, CHUNK_SIZE));
+            ids = categoryInsertTask.get();
+            stopWatch.stop();
+            log.info("Inserted categories in DB in {} ms", stopWatch.getDuration().toMillis());
+        }
+
+        return ids;
+    }
+
+    private static List<Short> generateAndInsertProducts(DTOGenerator dtoGenerator, Properties generationProperties, List<Short> categoryIds, ExecutorService executorService, DataSource dataSource) throws InterruptedException, ExecutionException, SQLException {
+        StopWatch stopWatch = new StopWatch();
+        stopWatch.start();
+        List<ProductDTO> productDTOS = dtoGenerator.generateAndValidateProducts(Integer.parseInt(generationProperties.getProperty("products.quantity")), categoryIds);
+        stopWatch.stop();
+        log.info("Generated products in {} ms", stopWatch.getDuration().toMillis());
+
+        List<Short> ids;
+        try (Connection connection = dataSource.getConnection()) {
+            ProductDAO productDAO = new ProductDAO(connection);
+            stopWatch.reset();
+            stopWatch.start();
+            Future<List<Short>> productInsertTask = executorService.submit(() -> productDAO.insertInChunks(productDTOS, CHUNK_SIZE));
+            ids = productInsertTask.get();
+            stopWatch.stop();
+            log.info("Inserted products in DB in {} ms", stopWatch.getDuration().toMillis());
+        }
+
+        return ids;
+    }
+
+    private static void generateAndInsertStockData(List<Short> storeIds, List<Short> productIds, Properties generationProperties, DataSource dataSource) throws SQLException {
+            StopWatch stopWatch = new StopWatch();
+            stopWatch.start();
+            StockGenerator stockGenerator = new StockGenerator(storeIds, productIds, dataSource);
+            stockGenerator.generateAndInsertStocks(Integer.parseInt(generationProperties.getProperty("stock.quantity")), CHUNK_SIZE, 3);
+            stopWatch.stop();
+            log.info("Inserted stocks in DB in {} ms", stopWatch.getDuration().toMillis());
     }
 
     private static String getStoreWithMostProductsOfType(String productType, CategoryDAO categoryDAO, StockDAO stockDAO) throws SQLException {
-
         Optional<CategoryDTO> categoryOptional = categoryDAO.findByName(productType);
         if (categoryOptional.isEmpty()) {
             log.error("Category not found.");
@@ -191,4 +158,22 @@ public class App {
         return storeWithMostProducts.toString();
     }
 
+    public static void dropAndCreateTables(Connection connection) {
+        String sql = """
+                DROP TABLE IF EXISTS stocks;
+                DROP TABLE IF EXISTS products;
+                DROP TABLE IF EXISTS categories;
+                DROP TABLE IF EXISTS stores;
+                CREATE TABLE categories (id smallserial PRIMARY KEY, name varchar(255) NOT NULL);
+                CREATE TABLE products (id smallserial PRIMARY KEY, name varchar(255) NOT NULL, category_id smallint NOT NULL REFERENCES categories, price numeric NOT NULL);
+                CREATE TABLE stores (id smallserial PRIMARY KEY, address varchar(255) NOT NULL);
+                CREATE TABLE stocks (shop_id smallint NOT NULL REFERENCES stores, product_id smallint NOT NULL REFERENCES products, quantity integer NOT NULL, PRIMARY KEY (shop_id, product_id));
+                """;
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.execute();
+            connection.commit();
+        } catch (SQLException e) {
+            throw new RuntimeException("Error creating tables", e);
+        }
+    }
 }

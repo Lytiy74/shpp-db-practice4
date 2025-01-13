@@ -24,7 +24,7 @@ public class DataSource {
         config.addDataSourceProperty("cachePrepStmts", "true");
         config.addDataSourceProperty("prepStmtCacheSize", "250");
         config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
-        config.setMaximumPoolSize(5);
+        config.setMaximumPoolSize(10);
         dataSource = new HikariDataSource(config);
     }
     public static DataSource getInstance() throws IOException {
