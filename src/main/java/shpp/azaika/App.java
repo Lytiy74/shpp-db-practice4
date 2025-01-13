@@ -52,8 +52,11 @@ public class App {
 
         generateAndInsertStockData(storeIds, productIds, generationProperties, dataSource);
 
+        log.info("Search shop with most product type {}", productType);
+        stopWatch.reset();
+        stopWatch.start();
         String storeWithMostProductsOfType = getStoreWithMostProductsOfType(productType, new CategoryDAO(dataSource.getConnection()), new StockDAO(dataSource.getConnection()));
-        log.info("Store with most products of type {}: {}", productType, storeWithMostProductsOfType);
+        log.info("Store with most products of type {}: {}, time to search {} ms", productType, storeWithMostProductsOfType, stopWatch.getDuration().toMillis());
 
         executorService.shutdown();
         log.info("Application finished in {} ms", stopWatch.getDuration().toMillis());
