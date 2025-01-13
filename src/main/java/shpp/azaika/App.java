@@ -9,15 +9,16 @@ import shpp.azaika.dao.StockDAO;
 import shpp.azaika.dao.StoreDAO;
 import shpp.azaika.dto.CategoryDTO;
 import shpp.azaika.dto.ProductDTO;
-import shpp.azaika.dto.StockDTO;
 import shpp.azaika.dto.StoreDTO;
 import shpp.azaika.util.DTOGenerator;
+import shpp.azaika.util.StockGenerator;
 
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -26,7 +27,7 @@ import java.util.concurrent.Future;
 
 public class App {
     private static final Logger log = LoggerFactory.getLogger(App.class);
-    private static final int CHUNK_SIZE = 3000;
+    private static final int CHUNK_SIZE = 10000;
 
     public static void main(String[] args) throws IOException, SQLException, ExecutionException, InterruptedException {
         log.info("Starting application...");
@@ -53,7 +54,7 @@ public class App {
 
         stopWatch.reset();
         stopWatch.start();
-        List<StoreDTO> storeDTOS = dtoGenerator.generateStores(storesQuantity);
+        List<StoreDTO> storeDTOS = dtoGenerator.generateAndValidateStores(storesQuantity);
         stopWatch.stop();
         log.info("Generated stores in {} ms", stopWatch.getDuration().toMillis());
 
@@ -67,7 +68,7 @@ public class App {
 
         stopWatch.reset();
         stopWatch.start();
-        List<CategoryDTO> categoryDTOS = dtoGenerator.generateCategories(categoriesQuantity);
+        List<CategoryDTO> categoryDTOS = dtoGenerator.generateAndValidateCategories(categoriesQuantity);
         stopWatch.stop();
         log.info("Generated categories in {} ms", stopWatch.getDuration().toMillis());
 
@@ -81,7 +82,7 @@ public class App {
 
         stopWatch.reset();
         stopWatch.start();
-        List<ProductDTO> productDTOS = dtoGenerator.generateProducts(productsQuantity, categoryIds);
+        List<ProductDTO> productDTOS = dtoGenerator.generateAndValidateProducts(productsQuantity, categoryIds);
         stopWatch.stop();
         log.info("Generated products in {} ms", stopWatch.getDuration().toMillis());
 
@@ -93,34 +94,28 @@ public class App {
         stopWatch.stop();
         log.info("Inserted products in DB in {} ms", stopWatch.getDuration().toMillis());
 
-        stopWatch.reset();
-        stopWatch.start();
-        List<StockDTO> stockDTOS = dtoGenerator.generateStocks(stocksQuantity, storeIds, productIds);
-        stopWatch.stop();
-        log.info("Generated stocks in {} ms", stopWatch.getDuration().toMillis());
-
         StockDAO stockDAO = new StockDAO(dataSource.getConnection());
         stopWatch.reset();
         stopWatch.start();
-        for (int i = 0; i < stockDTOS.size(); i += CHUNK_SIZE) {
-            int end = Math.min(i + CHUNK_SIZE, stockDTOS.size());
-            List<StockDTO> chunk = stockDTOS.subList(i, end);
-            stockDAO.insertInChunks(chunk, CHUNK_SIZE);
-            log.info("Inserted {} stocks",i);
-        }
+        StockGenerator stockGenerator = new StockGenerator(storeIds, productIds, stockDAO);
+        stockGenerator.generateAndInsertStocks(stocksQuantity, CHUNK_SIZE, 3);
         stopWatch.stop();
         log.info("Inserted stocks in DB in {} ms", stopWatch.getDuration().toMillis());
-
+        String storeWithMostProductsOfType = getStoreWithMostProductsOfType(productType, categoryDAO, stockDAO);
+        log.info("Store with most products of type {}", storeWithMostProductsOfType);
         executorService.shutdown();
         log.info("Application finished in {} ms", stopWatch.getDuration().toMillis());
     }
 
     public static void dropAndCreateTable(Connection connection){
         String sql = """
-                DROP TABLE IF EXISTS stock,products,categories,stores;
+                DROP TABLE IF EXISTS stocks;
+                DROP TABLE IF EXISTS products;
+                DROP TABLE IF EXISTS categories;
+                DROP TABLE IF EXISTS stores;
                 create table categories
                 (
-                    id   smallint default nextval('categories_id_seq'::regclass) not null
+                    id   smallserial not null
                         primary key,
                     name varchar(255)                                            not null
                 );
@@ -130,7 +125,7 @@ public class App {
                 
                 create table products
                 (
-                    id          smallint default nextval('products_id_seq'::regclass) not null
+                    id          smallserial not null
                         primary key,
                     name        varchar(255)                                          not null,
                     category_id smallint                                              not null
@@ -144,7 +139,7 @@ public class App {
                 
                 create table stores
                 (
-                    id      smallint default nextval('stores_id_seq'::regclass) not null
+                    id      smallserial not null
                         primary key,
                     address varchar(255)                                        not null
                 );
@@ -171,9 +166,29 @@ public class App {
                 """;
         try(PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.execute();
+            connection.commit();
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
 
     }
+
+    private static String getStoreWithMostProductsOfType(String productType, CategoryDAO categoryDAO, StockDAO stockDAO) throws SQLException {
+
+        Optional<CategoryDTO> categoryOptional = categoryDAO.findByName(productType);
+        if (categoryOptional.isEmpty()) {
+            log.error("Category not found.");
+            return "";
+        }
+        CategoryDTO category = categoryOptional.get();
+
+        Optional<StoreDTO> storeOptional = stockDAO.findStoreWithMostProductsByCategory(category.getId());
+        if (storeOptional.isEmpty()) {
+            log.error("No store found with products of type {}.", productType);
+            return "";
+        }
+        StoreDTO storeWithMostProducts = storeOptional.get();
+        return storeWithMostProducts.toString();
+    }
+
 }

@@ -23,7 +23,7 @@ public class ProductDAO {
         try (PreparedStatement stmt = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)){
             for (ProductDTO dto : dtos) {
                 stmt.setString(1, dto.getName());
-                stmt.setShort(2, dto.getId());
+                stmt.setShort(2, dto.getCategoryId());
                 stmt.setDouble(3, dto.getPrice());
                 stmt.addBatch();
             }

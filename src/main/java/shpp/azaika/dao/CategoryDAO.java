@@ -7,6 +7,7 @@ import shpp.azaika.dto.CategoryDTO;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 public class CategoryDAO {
     private static final Logger log = LoggerFactory.getLogger(CategoryDAO.class);
@@ -50,4 +51,21 @@ public class CategoryDAO {
         }
         return ids;
     }
+
+    public Optional<CategoryDTO> findByName(String name) throws SQLException {
+        log.info("Find category by name '{}'", name);
+        String sql = "SELECT id, name FROM categories WHERE name = ?";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, name);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    log.info("Category '{}' found", name);
+                    return Optional.of(new CategoryDTO(resultSet.getShort("id"), resultSet.getString("name")));
+                }
+            }
+        }
+        log.warn("Category '{}' not found", name);
+        return Optional.empty();
+    }
+
 }

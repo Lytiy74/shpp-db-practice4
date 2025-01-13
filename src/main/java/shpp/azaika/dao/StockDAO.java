@@ -2,12 +2,13 @@ package shpp.azaika.dao;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import shpp.azaika.dto.ProductDTO;
 import shpp.azaika.dto.StockDTO;
+import shpp.azaika.dto.StoreDTO;
 
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 public class StockDAO {
     private static final Logger log = LoggerFactory.getLogger(StockDAO.class);
@@ -53,4 +54,30 @@ public class StockDAO {
         }
         return ids;
     }
+
+    public Optional<StoreDTO> findStoreWithMostProductsByCategory(long categoryId) throws SQLException {
+        log.info("Find store with most products for category ID {}", categoryId);
+        String sql = """
+        SELECT s.id, s.address, COUNT(*) AS product_count
+        FROM stocks st
+        JOIN stores s ON st.shop_id = s.id
+        JOIN products p ON st.product_id = p.id
+        WHERE p.category_id = ?
+        GROUP BY s.id, s.address
+        ORDER BY product_count DESC
+        LIMIT 1
+    """;
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, categoryId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    log.info("Store with most products for category ID {} found", categoryId);
+                    return Optional.of(new StoreDTO(resultSet.getShort("id"), resultSet.getString("address")));
+                }
+            }
+        }
+        log.warn("No store found for category ID {}", categoryId);
+        return Optional.empty();
+    }
+
 }
