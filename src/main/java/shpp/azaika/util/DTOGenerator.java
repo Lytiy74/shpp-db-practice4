@@ -1,6 +1,8 @@
 package shpp.azaika.util;
 
 
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import shpp.azaika.dto.CategoryDTO;
@@ -17,11 +19,16 @@ public class DTOGenerator {
 
     private final DTOFaker faker = new DTOFaker();
     private final Random random = new Random();
+    private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
 
     public List<StoreDTO> generateAndValidateStores(int storesQty) {
         List<StoreDTO> stores = new ArrayList<>();
         for (int i = 0; i < storesQty; i++) {
             StoreDTO store = faker.generateStoreDTO();
+            if (!validator.validate(store).isEmpty()){
+                i--;
+                continue;
+            }
             stores.add(store);
         }
         log.info("Generated {} stores", storesQty);
@@ -29,10 +36,13 @@ public class DTOGenerator {
     }
 
     public List<CategoryDTO> generateAndValidateCategories(int categoryQty) {
-        List<CategoryDTO> categories = new ArrayList<>() {
-        };
+        List<CategoryDTO> categories = new ArrayList<>();
         for (int i = 0; i < categoryQty; i++) {
             CategoryDTO category = faker.generateCategoryDTO();
+            if (!validator.validate(category).isEmpty()){
+                i--;
+                continue;
+            }
             categories.add(category);
         }
         log.info("Generated {} categories", categoryQty);
@@ -49,6 +59,10 @@ public class DTOGenerator {
         for (int i = 0; i < productsQty; i++) {
             short randomCategoryId = categoriesIds.get(random.nextInt(categoriesIds.size()));
             ProductDTO product = faker.generateProductDTO(randomCategoryId);
+            if (!validator.validate(product).isEmpty()){
+                i--;
+                continue;
+            }
             products.add(product);
         }
         log.info("Generated {} products", productsQty);

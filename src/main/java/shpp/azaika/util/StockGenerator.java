@@ -1,5 +1,8 @@
 package shpp.azaika.util;
 
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
+import jakarta.validation.ValidatorFactory;
 import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,8 +25,10 @@ public class StockGenerator {
     private final DTOFaker faker;
     private final Queue<Pair<Short, Short>> allCombinations = new ConcurrentLinkedQueue<>();
     private final DataSource dataSource;
+    private final Validator validator;
 
     public StockGenerator(List<Short> storesIds, List<Short> productsIds, DataSource dataSource) {
+        this.validator = Validation.buildDefaultValidatorFactory().getValidator();
         this.faker = new DTOFaker();
         this.dataSource = dataSource;
         for (Short storeId : storesIds) {
@@ -46,6 +51,7 @@ public class StockGenerator {
                     if (combination == null) break;
 
                     StockDTO stock = faker.generateStockDTO(combination.getLeft(), combination.getRight());
+                    if(!validator.validate(stock).isEmpty()) continue;
                     stocks.add(stock);
                 }
 
