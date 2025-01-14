@@ -1,5 +1,7 @@
 package shpp.azaika;
 
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
 import org.apache.commons.lang3.time.StopWatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,6 +12,7 @@ import shpp.azaika.dao.StoreDAO;
 import shpp.azaika.dto.CategoryDTO;
 import shpp.azaika.dto.ProductDTO;
 import shpp.azaika.dto.StoreDTO;
+import shpp.azaika.util.DTOFaker;
 import shpp.azaika.util.DTOGenerator;
 import shpp.azaika.util.StockGenerator;
 
@@ -20,6 +23,7 @@ import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Random;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -40,7 +44,7 @@ public class App {
         Properties generationProperties = loadGenerationProperties();
 
         DataSource dataSource = DataSource.getInstance();
-        DTOGenerator dtoGenerator = new DTOGenerator();
+        DTOGenerator dtoGenerator = new DTOGenerator(new DTOFaker(),new Random(), Validation.buildDefaultValidatorFactory().getValidator());
 
         dropAndCreateTables(dataSource.getConnection());
 

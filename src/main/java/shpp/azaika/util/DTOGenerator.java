@@ -17,9 +17,15 @@ public class DTOGenerator {
 
     private static final Logger log = LoggerFactory.getLogger(DTOGenerator.class);
 
-    private final DTOFaker faker = new DTOFaker();
-    private final Random random = new Random();
-    private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+    private final DTOFaker faker;
+    private final Random random;
+    private final Validator validator;
+
+    public DTOGenerator(DTOFaker faker, Random random, Validator validator) {
+        this.faker = faker;
+        this.random = random;
+        this.validator = validator;
+    }
 
     public List<StoreDTO> generateAndValidateStores(int storesQty) {
         List<StoreDTO> stores = new ArrayList<>();
