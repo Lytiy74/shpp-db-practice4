@@ -70,7 +70,28 @@
       <version>5.11.4</version>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>software.aws.mcs</groupId>
+      <artifactId>aws-sigv4-auth-cassandra-java-driver-plugin</artifactId>
+      <version>4.0.9</version>
+    </dependency>
+    <dependency>
+      <groupId>com.datastax.oss</groupId>
+      <artifactId>java-driver-core</artifactId>
+      <version>4.17.0</version>
+    </dependency>
 
+    <dependency>
+      <groupId>com.datastax.oss</groupId>
+      <artifactId>java-driver-query-builder</artifactId>
+      <version>4.17.0</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.datastax.oss</groupId>
+      <artifactId>java-driver-mapper-runtime</artifactId>
+      <version>4.17.0</version>
+    </dependency>
   </dependencies>
   <profiles>
     <profile>

@@ -1,7 +1,6 @@
 package shpp.azaika.util;
 
 
-import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,6 +11,7 @@ import shpp.azaika.dto.StoreDTO;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.UUID;
 
 public class DTOGenerator {
 
@@ -55,7 +55,7 @@ public class DTOGenerator {
         return categories;
     }
 
-    public List<ProductDTO> generateAndValidateProducts(int productsQty, List<Short> categoriesIds) {
+    public List<ProductDTO> generateAndValidateProducts(int productsQty, List<UUID> categoriesIds) {
         List<ProductDTO> products = new ArrayList<>();
         if (categoriesIds.isEmpty()) {
             log.warn("No categories id`s found. Generate categories first.");
@@ -63,7 +63,7 @@ public class DTOGenerator {
         }
 
         for (int i = 0; i < productsQty; i++) {
-            short randomCategoryId = categoriesIds.get(random.nextInt(categoriesIds.size()));
+            UUID randomCategoryId = categoriesIds.get(random.nextInt(categoriesIds.size()));
             ProductDTO product = faker.generateProductDTO(randomCategoryId);
             if (!validator.validate(product).isEmpty()){
                 i--;

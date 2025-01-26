@@ -65,8 +65,8 @@ class CategoryDAOTest {
 
         List<Short> ids = categoryDAO.insertBatch(dtos);
 
-        Assertions.assertEquals(1, (short)ids.get(0));
-        Assertions.assertEquals(2,(short) ids.get(1));
+        Assertions.assertEquals(1, (short) ids.get(0));
+        Assertions.assertEquals(2, (short) ids.get(1));
     }
 
     @Test
@@ -89,8 +89,8 @@ class CategoryDAOTest {
         List<Short> ids = categoryDAO.insertInChunks(dtos, 1);
 
         Assertions.assertEquals(2, ids.size());
-        Assertions.assertEquals(1,(short) ids.get(0));
-        Assertions.assertEquals(2,(short) ids.get(1));
+        Assertions.assertEquals(1, (short) ids.get(0));
+        Assertions.assertEquals(2, (short) ids.get(1));
         Mockito.verify(stmt, Mockito.times(2)).executeBatch();
     }
 

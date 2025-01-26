@@ -2,12 +2,14 @@ package shpp.azaika.dto;
 
 import org.hibernate.validator.constraints.Length;
 
+import java.util.UUID;
+
 public class CategoryDTO {
-    private short id;
+    private UUID id;
     @Length(min = 5, max = 255)
     private final String categoryName;
 
-    public CategoryDTO(short id, String categoryName) {
+    public CategoryDTO(UUID id, String categoryName) {
         this.id = id;
         this.categoryName = categoryName;
     }
@@ -16,7 +18,7 @@ public class CategoryDTO {
         this.categoryName = categoryName;
     }
 
-    public short getId() {
+    public UUID getId() {
         return id;
     }
 

@@ -1,4 +1,4 @@
-package shpp.azaika.util;
+package shpp.azaika.dao;
 
 import jakarta.validation.Validator;
 import org.junit.jupiter.api.BeforeEach;
@@ -8,6 +8,8 @@ import org.mockito.MockitoAnnotations;
 import shpp.azaika.dto.CategoryDTO;
 import shpp.azaika.dto.ProductDTO;
 import shpp.azaika.dto.StoreDTO;
+import shpp.azaika.util.DTOFaker;
+import shpp.azaika.util.DTOGenerator;
 
 import java.util.ArrayList;
 import java.util.Collections;

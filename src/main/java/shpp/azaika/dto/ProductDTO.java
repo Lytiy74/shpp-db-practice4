@@ -3,28 +3,31 @@ package shpp.azaika.dto;
 import jakarta.validation.constraints.Positive;
 import org.hibernate.validator.constraints.Length;
 
+import java.math.BigDecimal;
+import java.util.UUID;
+
 public class ProductDTO {
-    private short id;
-    private final short categoryId;
+    private UUID id;
+    private final UUID categoryId;
     @Length(min = 5, max = 255)
     private final String name;
     @Positive
-    private final double price;
+    private final BigDecimal price;
 
-    public ProductDTO(short id, short categoryId, String name, double price) {
+    public ProductDTO(UUID id, UUID categoryId, String name, BigDecimal price) {
         this.id = id;
         this.categoryId = categoryId;
         this.name = name;
         this.price = price;
     }
 
-    public ProductDTO(short categoryId, String name, double price) {
+    public ProductDTO(UUID categoryId, String name, BigDecimal price) {
         this.categoryId = categoryId;
         this.name = name;
         this.price = price;
     }
 
-    public short getId() {
+    public UUID getId() {
         return id;
     }
 
@@ -32,11 +35,11 @@ public class ProductDTO {
         return name;
     }
 
-    public double getPrice() {
+    public BigDecimal getPrice() {
         return price;
     }
 
-    public short getCategoryId() {
+    public UUID getCategoryId() {
         return categoryId;
     }
 
