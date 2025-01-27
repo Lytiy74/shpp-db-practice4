@@ -24,7 +24,7 @@ public class ShopByCategoryDAO {
     }
 
     public List<Pair<UUID, UUID>> insertBatch(List<ShopByCategoryDTO> dtos) {
-        String cqlToCategories = "INSERT INTO \"practical5Keyspace\".shop_by_category (category_id, shop_id, quantity) VALUES (?,?,?)";
+        String cqlToCategories = "INSERT INTO \"practical5Keyspace\".shop_by_category (category_id, shop_id, category_quantity) VALUES (?,?,?)";
         PreparedStatement stmt = connection.prepare(cqlToCategories);
         for (ShopByCategoryDTO dto : dtos) {
             BoundStatement bind = stmt.bind(dto.getCategoryId(), dto.getShopId(), dto.getQuantity());
