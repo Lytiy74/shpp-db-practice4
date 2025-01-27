@@ -26,7 +26,7 @@ public class SchemaManager {
                     CREATE TABLE IF NOT EXISTS categories_id_by_name (
                         category_name TEXT,
                         category_id UUID,
-                        PRIMARY KEY (category_name, category_id)
+                        PRIMARY KEY (category_name)
                     )
                     """,
             "products", """
@@ -43,7 +43,7 @@ public class SchemaManager {
                         shop_id           UUID,
                         category_quantity INT,
                         PRIMARY KEY (category_id, category_quantity, shop_id)
-                    ) WITH CLUSTERING ORDER BY (category_quantity DESC, shop_id DESC);
+                    ) WITH CLUSTERING ORDER BY (category_quantity DESC, shop_id ASC);
                     """,
             "shops", """
                     CREATE TABLE IF NOT EXISTS shops (
