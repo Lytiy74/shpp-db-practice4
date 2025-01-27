@@ -13,23 +13,21 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class StockGenerator {
     private static final Logger log = LoggerFactory.getLogger(StockGenerator.class);
     private final DTOFaker faker;
     private final Queue<Pair<UUID, UUID>> allCombinations;
     private final Validator validator;
+    private final ExecutorService executorService;
 
-    private ExecutorService executorService;
-
-    public StockGenerator(List<UUID> storesIds, List<UUID> productsIds) {
+    public StockGenerator(List<UUID> storesIds, List<UUID> productsIds, int threadPoolSize) {
         this.validator = Validation.buildDefaultValidatorFactory().getValidator();
         this.faker = new DTOFaker();
         this.allCombinations = new ConcurrentLinkedQueue<>();
+        this.executorService = Executors.newFixedThreadPool(threadPoolSize);
         initializeCombinations(storesIds, productsIds);
     }
 
@@ -41,41 +39,44 @@ public class StockGenerator {
         }
     }
 
-    public void generateAndInsertStocks(int stockQty, int chunkSize, int threadPoolSize) {
-        executorService = Executors.newFixedThreadPool(threadPoolSize);
+    public void generateAndInsertStocks(int stockQty, int chunkSize) {
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
+        AtomicInteger totalInserted = new AtomicInteger(0);
+
         for (int i = 0; i < stockQty; i += chunkSize) {
-            executorService.submit(createTask(chunkSize));
+            futures.add(CompletableFuture.runAsync(() -> processChunk(chunkSize, totalInserted), executorService));
         }
 
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
         shutdownExecutor();
+        log.info("Total inserted stocks: {}", totalInserted.get());
     }
 
-    private Runnable createTask(int chunkSize) {
-        return () -> {
-            try (CqlSession connection = createSession()) {
-                ShopByCategoryDAO stockDAO = new ShopByCategoryDAO(connection);
-                List<ShopByCategoryDTO> shopByCategoryDTOS = new ArrayList<>();
+    private void processChunk(int chunkSize, AtomicInteger totalInserted) {
+        try (CqlSession connection = createSession()) {
+            ShopByCategoryDAO stockDAO = new ShopByCategoryDAO(connection);
+            List<ShopByCategoryDTO> shopByCategoryDTOS = new ArrayList<>();
 
-                while (shopByCategoryDTOS.size() < chunkSize) {
-                    Pair<UUID, UUID> combination = allCombinations.poll();
-                    if (combination == null) break;
+            while (shopByCategoryDTOS.size() < chunkSize) {
+                Pair<UUID, UUID> combination = allCombinations.poll();
+                if (combination == null) break;
 
-                    ShopByCategoryDTO stock = faker.generateShopByCategoryDTO(combination.getLeft(), combination.getRight());
-                    if (!isValid(stock)) {
-                        log.warn("Invalid stock data: {}", stock);
-                        continue;
-                    }
-                    shopByCategoryDTOS.add(stock);
+                ShopByCategoryDTO stock = faker.generateShopByCategoryDTO(combination.getLeft(), combination.getRight());
+                if (!isValid(stock)) {
+                    log.warn("Invalid stock data: {}", stock);
+                    continue;
                 }
-
-                if (!shopByCategoryDTOS.isEmpty()) {
-                    stockDAO.insertBatch(shopByCategoryDTOS);
-                    log.info("Inserted {} shopByCategoryDTOs by thread {}", shopByCategoryDTOS.size(), Thread.currentThread().getName());
-                }
-            } catch (Exception e) {
-                log.error("Error in thread {}: {}", Thread.currentThread().getName(), e.getMessage(), e);
+                shopByCategoryDTOS.add(stock);
             }
-        };
+
+            if (!shopByCategoryDTOS.isEmpty()) {
+                stockDAO.insertBatch(shopByCategoryDTOS);
+                totalInserted.addAndGet(shopByCategoryDTOS.size());
+                log.info("Inserted {} shopByCategoryDTOs by thread {}", shopByCategoryDTOS.size(), Thread.currentThread().getName());
+            }
+        } catch (Exception e) {
+            log.error("Error in thread {}: {}", Thread.currentThread().getName(), e.getMessage(), e);
+        }
     }
 
     private CqlSession createSession() {

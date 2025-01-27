@@ -116,8 +116,8 @@ public class App {
         stopWatch.start();
 
         int quantity = Integer.parseInt(properties.getProperty("stock.quantity"));
-        StockGenerator stockGenerator = new StockGenerator(categoryIds, storeIds);
-        stockGenerator.generateAndInsertStocks(quantity, CHUNK_SIZE, THREAD_POOL_SIZE);
+        StockGenerator stockGenerator = new StockGenerator(categoryIds, storeIds, THREAD_POOL_SIZE);
+        stockGenerator.generateAndInsertStocks(quantity, CHUNK_SIZE);
 
         stopWatch.stop();
         log.info("Inserted stocks in DB in {} ms", stopWatch.getDuration());
