@@ -26,16 +26,23 @@ public class ShopByCategoryDAO {
     private static final String SELECT_SHOP_ADDRESS =
             "SELECT shop_address FROM \"practical5Keyspace\".shops WHERE shop_id = ?";
 
+    private final PreparedStatement insertShopByCategoryStmt;
+    private final PreparedStatement selectShopIdByCategoryStmt;
+    private final PreparedStatement selectShopAddressStmt;
     private final CqlSession connection;
+    private PreparedStatement stmt;
+
 
     public ShopByCategoryDAO(CqlSession connection) {
         this.connection = connection;
-    }
 
+        this.insertShopByCategoryStmt = connection.prepare(INSERT_SHOP_BY_CATEGORY);
+        this.selectShopIdByCategoryStmt = connection.prepare(SELECT_SHOP_ID_BY_CATEGORY);
+        this.selectShopAddressStmt = connection.prepare(SELECT_SHOP_ADDRESS);
+    }
     public List<Pair<UUID, UUID>> insertBatch(List<ShopByCategoryDTO> dtos) {
         log.info("Inserting batch of {} shop-by-category entries.", dtos.size());
 
-        PreparedStatement stmt = connection.prepare(INSERT_SHOP_BY_CATEGORY);
         dtos.forEach(dto -> executeAsync(stmt.bind(dto.getCategoryId(), dto.getShopId(), dto.getQuantity())));
 
         return extractIds(dtos);
@@ -56,14 +63,14 @@ public class ShopByCategoryDAO {
         log.info("Finding store with most products for category ID '{}'.", categoryId);
 
         try {
-            UUID shopId = executeQuery(SELECT_SHOP_ID_BY_CATEGORY, categoryId, "shop_id", UUID.class)
+            UUID shopId = executeQuery(selectShopIdByCategoryStmt, categoryId, "shop_id", UUID.class)
                     .orElse(null);
 
             if (shopId == null) {
                 log.warn("No shop found for category ID '{}'.", categoryId);
                 return Optional.empty();
             }
-            String shopAddress = executeQuery(SELECT_SHOP_ADDRESS, shopId, "shop_address", String.class)
+            String shopAddress = executeQuery(selectShopAddressStmt, shopId, "shop_address", String.class)
                     .orElse(null);
 
             if (shopAddress != null) {
@@ -79,9 +86,9 @@ public class ShopByCategoryDAO {
         }
     }
 
-    private <T> Optional<T> executeQuery(String query, Object param, String columnName, Class<T> type) {
+
+    private <T> Optional<T> executeQuery(PreparedStatement stmt, Object param, String columnName, Class<T> type) {
         try {
-            PreparedStatement stmt = connection.prepare(query);
             BoundStatement bind = stmt.bind(param);
             ResultSet resultSet = connection.execute(bind);
 
@@ -90,13 +97,18 @@ public class ShopByCategoryDAO {
                 return Optional.ofNullable(row.get(columnName, type));
             }
         } catch (Exception e) {
-            log.error("Error executing query '{}': {}", query, e.getMessage(), e);
+            log.error("Error executing query '{}': {}", stmt.getQuery(), e.getMessage(), e);
         }
         return Optional.empty();
     }
 
+
     private void executeAsync(BoundStatement boundStatement) {
-        connection.executeAsync(boundStatement);
+        try {
+            connection.executeAsync(boundStatement);
+        } catch (Exception e) {
+            log.error("Error executing async query '{}': {}", boundStatement, e.getMessage(), e);
+        }
     }
 
     private List<Pair<UUID, UUID>> extractIds(List<ShopByCategoryDTO> dtos) {

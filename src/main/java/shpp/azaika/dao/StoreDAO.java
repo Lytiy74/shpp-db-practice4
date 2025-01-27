@@ -25,9 +25,12 @@ public class StoreDAO implements DAO<StoreDTO> {
 
     public List<UUID> insertBatch(List<StoreDTO> dtos) {
         log.info("Inserting batch of {} stores.", dtos.size());
-
-        PreparedStatement stmt = connection.prepare(INSERT_STORE);
-        dtos.forEach(dto -> executeAsync(stmt.bind(dto.getId(), dto.getAddress())));
+        try {
+            PreparedStatement stmt = connection.prepare(INSERT_STORE);
+            dtos.forEach(dto -> executeAsync(stmt.bind(dto.getId(), dto.getAddress())));
+        } catch (Exception e) {
+            log.error(e.getMessage(), e);
+        }
 
         return extractIds(dtos);
     }
