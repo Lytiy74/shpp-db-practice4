@@ -32,7 +32,7 @@ public class App {
     public static void main(String[] args) throws IOException, SQLException, ExecutionException, InterruptedException {
         log.info("Starting application...");
         SchemaManager.dropAndCreateTables();
-        Thread.sleep(500);
+        Thread.sleep(30000);
         StopWatch stopWatch = new StopWatch();
         stopWatch.start();
 
@@ -49,7 +49,8 @@ public class App {
         List<UUID> productIds = generateAndInsertProducts(dtoGenerator, generationProperties, categoriesIds, executorService);
         generateAndInsertToShopByCategory(categoriesIds, storeIds, generationProperties);
 
-
+        String storeWithMostProductsOfType = getStoreWithMostProductsOfType(productType);
+        log.info(storeWithMostProductsOfType);
     }
 
     private static void generateAndInsertToShopByCategory(List<UUID> categoriesIds, List<UUID> storeIds, Properties generationProperties) {
@@ -135,21 +136,27 @@ public class App {
     }
 
 
-    private static String getStoreWithMostProductsOfType(String productType, CategoryDAO categoryDAO, ShopByCategoryDAO shopByCategoryDAO) {
-        Optional<CategoryDTO> categoryOptional = categoryDAO.findByName(productType);
-        if (categoryOptional.isEmpty()) {
-            log.error("Category not found.");
-            return "";
-        }
-        CategoryDTO category = categoryOptional.get();
+    private static String getStoreWithMostProductsOfType(String productType) {
+        try (CqlSession connection = CqlSession.builder().build()) {
+            CategoryDAO categoryDAO = new CategoryDAO(connection);
+            Optional<CategoryDTO> categoryOptional = categoryDAO.findByName(productType);
+            if (categoryOptional.isEmpty()) {
+                log.error("Category not found.");
+                return "";
+            }
 
-        Optional<StoreDTO> storeOptional = shopByCategoryDAO.findStoreWithMostProductsByCategory(category.getId());
-        if (storeOptional.isEmpty()) {
-            log.error("No store found with products of type {}.", productType);
-            return "";
+            CategoryDTO category = categoryOptional.get();
+
+            ShopByCategoryDAO shopByCategoryDAO = new ShopByCategoryDAO(connection);
+            Optional<StoreDTO> storeOptional = shopByCategoryDAO.findStoreWithMostProductsByCategory(category.getId());
+            if (storeOptional.isEmpty()) {
+                log.error("No store found with products of type {}.", productType);
+                return "";
+            }
+            StoreDTO storeWithMostProducts = storeOptional.get();
+
+            return storeWithMostProducts.toString();
         }
-        StoreDTO storeWithMostProducts = storeOptional.get();
-        return storeWithMostProducts.toString();
     }
 
 }

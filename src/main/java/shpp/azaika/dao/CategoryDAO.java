@@ -59,7 +59,7 @@ public class CategoryDAO {
     public Optional<CategoryDTO> findByName(String name) {
         log.info("Find category by name '{}'", name);
 
-        String cql = "SELECT id FROM \"practical5Keyspace\".categories_id_by_name WHERE category_name = ?";
+        String cql = "SELECT category_id FROM \"practical5Keyspace\".categories_id_by_name WHERE category_name = ?";
 
         try {
             PreparedStatement statement = connection.prepare(cql);

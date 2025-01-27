@@ -3,6 +3,8 @@ package shpp.azaika.dao;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
+import com.datastax.oss.driver.api.core.cql.ResultSet;
+import com.datastax.oss.driver.api.core.cql.Row;
 import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,6 +55,34 @@ public class ShopByCategoryDAO {
     }
 
     public Optional<StoreDTO> findStoreWithMostProductsByCategory(UUID categoryId) {
-        return Optional.empty();
+
+        String cqlToGetShopId = "SELECT shop_id FROM \"practical5Keyspace\".shop_by_category WHERE category_id = ?";
+        String cqlTOGetShopAddres = "SELECT shop_address FROM \"practical5Keyspace\".shops WHERE shop_id = ?";
+        Optional result;
+        try {
+            PreparedStatement stmtToGetShopId = connection.prepare(cqlToGetShopId);
+            BoundStatement bind = stmtToGetShopId.bind(categoryId);
+            ResultSet resultSet = connection.execute(bind);
+
+            if (resultSet.iterator().hasNext()) {
+                Row row = resultSet.one();
+                UUID shopId = row.getUuid("shop_id");
+
+                PreparedStatement stmtToGetShopAddress = connection.prepare(cqlTOGetShopAddres);
+                BoundStatement bind1 = stmtToGetShopAddress.bind(shopId);
+                ResultSet execute = connection.execute(bind1);
+                if (execute.iterator().hasNext()) {
+                    Row row1 = execute.one();
+                    String address = row1.getString("shop_address");
+                    return Optional.of(new StoreDTO(shopId, address));
+                }
+                log.info("Shop found with ID '{}'", shopId);
+            }
+
+
+            return Optional.empty();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to find category by name", e);
+        }
     }
 }
