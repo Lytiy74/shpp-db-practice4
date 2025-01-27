@@ -27,39 +27,19 @@ public class StockGenerator {
     public StockGenerator(List<UUID> storesIds, List<UUID> productsIds) {
         this.validator = Validation.buildDefaultValidatorFactory().getValidator();
         this.faker = new DTOFaker();
-        for (UUID storeId : storesIds) {
-            for (UUID productId : productsIds) {
-                allCombinations.add(Pair.of(storeId, productId));
-            }
-        }
+
+        storesIds.parallelStream().forEach(storeId ->
+                productsIds.forEach(productId ->
+                        allCombinations.add(Pair.of(storeId, productId))
+                )
+        );
     }
 
     public void generateAndInsertStocks(int stockQty, int chunkSize, int threadCount) {
         ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
 
-        Runnable task = () -> {
-            try (CqlSession connection = CqlSession.builder().build()) {
-                ShopByCategoryDAO stockDAO = new ShopByCategoryDAO(connection);
-                List<ShopByCategoryDTO> stocks = new ArrayList<>();
-
-                while (stocks.size() < chunkSize) {
-                    Pair<UUID, UUID> combination = allCombinations.poll();
-                    if (combination == null) break;
-
-                    ShopByCategoryDTO stock = faker.generateShopByCategoryDTO(combination.getLeft(), combination.getRight());
-                    if(!validator.validate(stock).isEmpty()) continue;
-                    stocks.add(stock);
-                }
-
-                if (!stocks.isEmpty()) {
-                    stockDAO.insertBatch(stocks);
-                    log.info("Inserted {} stocks by thread {}", stocks.size(), Thread.currentThread().getName());
-                }
-            }
-        };
-
         for (int i = 0; i < stockQty; i += chunkSize) {
-            executorService.submit(task);
+            executorService.submit(getTask(chunkSize));
         }
 
         executorService.shutdown();
@@ -71,5 +51,33 @@ public class StockGenerator {
         }
 
         log.info("All stocks generated and inserted.");
+    }
+
+    private Runnable getTask(int chunkSize) {
+        return () -> {
+            try (CqlSession connection = CqlSession.builder().build()) {
+                ShopByCategoryDAO stockDAO = new ShopByCategoryDAO(connection);
+                List<ShopByCategoryDTO> shopByCategoryDTOS = new ArrayList<>();
+
+                while (shopByCategoryDTOS.size() < chunkSize) {
+                    Pair<UUID, UUID> combination = allCombinations.poll();
+                    if (combination == null) break;
+
+                    ShopByCategoryDTO stock = faker.generateShopByCategoryDTO(combination.getLeft(), combination.getRight());
+                    if (!validator.validate(stock).isEmpty()) {
+                        log.warn("Invalid stock data: {}", stock);
+                        continue;
+                    }
+                    shopByCategoryDTOS.add(stock);
+                }
+
+                if (!shopByCategoryDTOS.isEmpty()) {
+                    stockDAO.insertBatch(shopByCategoryDTOS);
+                    log.info("Inserted {} shopByCategoryDTOS by thread {}", shopByCategoryDTOS.size(), Thread.currentThread().getName());
+                }
+            } catch (Exception e) {
+                log.error("Error in thread {}: {}", Thread.currentThread().getName(), e.getMessage(), e);
+            }
+        };
     }
 }
