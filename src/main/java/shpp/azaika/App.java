@@ -14,6 +14,7 @@ import shpp.azaika.dto.ProductDTO;
 import shpp.azaika.dto.StoreDTO;
 import shpp.azaika.util.DTOFaker;
 import shpp.azaika.util.DTOGenerator;
+import shpp.azaika.util.SchemaManager;
 import shpp.azaika.util.StockGenerator;
 
 import java.io.IOException;
@@ -30,7 +31,8 @@ public class App {
 
     public static void main(String[] args) throws IOException, SQLException, ExecutionException, InterruptedException {
         log.info("Starting application...");
-
+        SchemaManager.dropAndCreateTables();
+        Thread.sleep(500);
         StopWatch stopWatch = new StopWatch();
         stopWatch.start();
 
@@ -69,7 +71,7 @@ public class App {
         return generationProperties;
     }
 
-    private static List<UUID> generateAndInsertStores(DTOGenerator dtoGenerator, Properties generationProperties, ExecutorService executorService) throws InterruptedException, ExecutionException, SQLException {
+    private static List<UUID> generateAndInsertStores(DTOGenerator dtoGenerator, Properties generationProperties, ExecutorService executorService) throws InterruptedException, ExecutionException {
         StopWatch stopWatch = new StopWatch();
         stopWatch.start();
         List<StoreDTO> storeDTOS = dtoGenerator.generateAndValidateStores(Integer.parseInt(generationProperties.getProperty("stores.quantity")));
@@ -90,7 +92,7 @@ public class App {
         return ids;
     }
 
-    private static List<UUID> generateAndInsertCategories(DTOGenerator dtoGenerator, Properties generationProperties, ExecutorService executorService) throws InterruptedException, ExecutionException, SQLException {
+    private static List<UUID> generateAndInsertCategories(DTOGenerator dtoGenerator, Properties generationProperties, ExecutorService executorService) throws InterruptedException, ExecutionException {
         StopWatch stopWatch = new StopWatch();
         stopWatch.start();
         List<CategoryDTO> categoryDTOS = dtoGenerator.generateAndValidateCategories(Integer.parseInt(generationProperties.getProperty("categories.quantity")));
@@ -111,7 +113,7 @@ public class App {
         return ids;
     }
 
-    private static List<UUID> generateAndInsertProducts(DTOGenerator dtoGenerator, Properties generationProperties, List<UUID> categoryIds, ExecutorService executorService) throws InterruptedException, ExecutionException, SQLException {
+    private static List<UUID> generateAndInsertProducts(DTOGenerator dtoGenerator, Properties generationProperties, List<UUID> categoryIds, ExecutorService executorService) throws InterruptedException, ExecutionException {
         StopWatch stopWatch = new StopWatch();
         stopWatch.start();
         List<ProductDTO> productDTOS = dtoGenerator.generateAndValidateProducts(Integer.parseInt(generationProperties.getProperty("products.quantity")), categoryIds);
@@ -133,7 +135,7 @@ public class App {
     }
 
 
-    private static String getStoreWithMostProductsOfType(String productType, CategoryDAO categoryDAO, ShopByCategoryDAO shopByCategoryDAO) throws SQLException {
+    private static String getStoreWithMostProductsOfType(String productType, CategoryDAO categoryDAO, ShopByCategoryDAO shopByCategoryDAO) {
         Optional<CategoryDTO> categoryOptional = categoryDAO.findByName(productType);
         if (categoryOptional.isEmpty()) {
             log.error("Category not found.");
