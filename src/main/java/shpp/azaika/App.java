@@ -21,7 +21,7 @@ import java.util.concurrent.Future;
 public class App {
     private static final Logger log = LoggerFactory.getLogger(App.class);
     private static final int CHUNK_SIZE = 3000;
-    private static final int THREAD_POOL_SIZE = 1;
+    private static final int THREAD_POOL_SIZE = 4;
 
     public static void main(String[] args) throws IOException, ExecutionException, InterruptedException {
         log.info("Starting application...");
@@ -45,7 +45,7 @@ public class App {
         }
 
         stopWatch.stop();
-        log.info("Application finished in {} ms", stopWatch.getTime());
+        log.info("Application finished in {} ms", stopWatch.getDuration());
     }
 
     private static void initializeSchema() throws InterruptedException {
@@ -74,7 +74,7 @@ public class App {
         int quantity = Integer.parseInt(properties.getProperty(entityName + ".quantity"));
         List<T> entities = generator.generate(quantity);
         stopWatch.stop();
-        log.info("Generated {} in {} ms", entityName, stopWatch.getTime());
+        log.info("Generated {} in {} ms", entityName, stopWatch.getDuration());
 
         try (CqlSession session = CqlSession.builder().build()) {
             stopWatch.reset();
@@ -84,7 +84,7 @@ public class App {
             List<UUID> ids = task.get();
 
             stopWatch.stop();
-            log.info("Inserted {} in DB in {} ms", entityName, stopWatch.getTime());
+            log.info("Inserted {} in DB in {} ms", entityName, stopWatch.getDuration());
             return ids;
         }
     }
@@ -96,7 +96,7 @@ public class App {
         int quantity = Integer.parseInt(properties.getProperty("products.quantity"));
         List<ProductDTO> products = dtoGenerator.generateAndValidateProducts(quantity, categoryIds);
         stopWatch.stop();
-        log.info("Generated products in {} ms", stopWatch.getTime());
+        log.info("Generated products in {} ms", stopWatch.getDuration());
 
         try (CqlSession session = CqlSession.builder().build()) {
             stopWatch.reset();
@@ -107,7 +107,7 @@ public class App {
             task.get();
 
             stopWatch.stop();
-            log.info("Inserted products in DB in {} ms", stopWatch.getTime());
+            log.info("Inserted products in DB in {} ms", stopWatch.getDuration());
         }
     }
 
@@ -120,7 +120,7 @@ public class App {
         stockGenerator.generateAndInsertStocks(quantity, CHUNK_SIZE, THREAD_POOL_SIZE);
 
         stopWatch.stop();
-        log.info("Inserted stocks in DB in {} ms", stopWatch.getTime());
+        log.info("Inserted stocks in DB in {} ms", stopWatch.getDuration());
     }
 
     private static String getStoreWithMostProductsOfType(String productType) {
