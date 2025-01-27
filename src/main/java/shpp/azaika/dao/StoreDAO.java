@@ -11,8 +11,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-public class StoreDAO {
+public class StoreDAO implements DAO<StoreDTO> {
     private static final Logger log = LoggerFactory.getLogger(StoreDAO.class);
+
+    private static final String INSERT_STORE =
+            "INSERT INTO \"practical5Keyspace\".shops (shop_id, shop_address) VALUES (?,?)";
 
     private final CqlSession connection;
 
@@ -20,33 +23,34 @@ public class StoreDAO {
         this.connection = connection;
     }
 
-
     public List<UUID> insertBatch(List<StoreDTO> dtos) {
-        String cql = "INSERT INTO \"practical5Keyspace\".shops (shop_id, shop_address) VALUES (?,?)";
-        PreparedStatement stmt = connection.prepare(cql);
-        for (StoreDTO dto : dtos) {
-            BoundStatement bind = stmt.bind(dto.getId(), dto.getAddress());
-            connection.executeAsync(bind);
-        }
-        return retrieveIds(dtos);
+        log.info("Inserting batch of {} stores.", dtos.size());
+
+        PreparedStatement stmt = connection.prepare(INSERT_STORE);
+        dtos.forEach(dto -> executeAsync(stmt.bind(dto.getId(), dto.getAddress())));
+
+        return extractIds(dtos);
     }
 
     public List<UUID> insertInChunks(List<StoreDTO> dtos, int chunkSize) {
-        int total = dtos.size();
+        log.info("Inserting stores in chunks of size {}.", chunkSize);
+
         List<UUID> ids = new ArrayList<>();
-        for (int i = 0; i < total; i += chunkSize) {
-            int end = Math.min(i + chunkSize, total);
-            List<StoreDTO> chunk = dtos.subList(i, end);
+        for (int i = 0; i < dtos.size(); i += chunkSize) {
+            List<StoreDTO> chunk = dtos.subList(i, Math.min(i + chunkSize, dtos.size()));
             ids.addAll(insertBatch(chunk));
         }
         return ids;
     }
 
-    private List<UUID> retrieveIds(List<StoreDTO> dtos) {
+    private void executeAsync(BoundStatement boundStatement) {
+        connection.executeAsync(boundStatement);
+        log.debug("Executed async insert: {}", boundStatement.getPreparedStatement().getQuery());
+    }
+
+    private List<UUID> extractIds(List<StoreDTO> dtos) {
         List<UUID> ids = new ArrayList<>();
-        for (StoreDTO dto : dtos) {
-            ids.add(dto.getId());
-        }
+        dtos.forEach(dto -> ids.add(dto.getId()));
         return ids;
     }
 }

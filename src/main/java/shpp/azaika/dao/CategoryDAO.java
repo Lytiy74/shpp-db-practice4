@@ -14,8 +14,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public class CategoryDAO {
+public class CategoryDAO implements DAO<CategoryDTO> {
     private static final Logger log = LoggerFactory.getLogger(CategoryDAO.class);
+    private static final String INSERT_CATEGORY = "INSERT INTO \"practical5Keyspace\".categories (category_id, category_name) VALUES (?,?)";
+    private static final String INSERT_CATEGORY_ID_BY_NAME = "INSERT INTO \"practical5Keyspace\".categories_id_by_name (category_name, category_id) VALUES (?,?)";
+    private static final String SELECT_CATEGORY_BY_NAME = "SELECT category_id FROM \"practical5Keyspace\".categories_id_by_name WHERE category_name = ?";
 
     private final CqlSession connection;
 
@@ -24,45 +27,41 @@ public class CategoryDAO {
     }
 
     public List<UUID> insertBatch(List<CategoryDTO> dtos) {
-        String cqlToCategories = "INSERT INTO \"practical5Keyspace\".categories (category_id, category_name) VALUES (?,?)";
-        String cqlToCategoriesIdByName = "INSERT INTO \"practical5Keyspace\".categories_id_by_name (category_name, category_id) VALUES (?,?)";
-        PreparedStatement stmt = connection.prepare(cqlToCategories);
-        PreparedStatement stmtIdByName = connection.prepare(cqlToCategoriesIdByName);
-        for (CategoryDTO dto : dtos) {
-            BoundStatement bind = stmt.bind(dto.getId(), dto.getCategoryName());
-            BoundStatement bindId = stmtIdByName.bind(dto.getCategoryName(), dto.getId());
-            connection.executeAsync(bind);
-            connection.executeAsync(bindId);
-        }
-        return retrieveIds(dtos);
+        PreparedStatement stmt = connection.prepare(INSERT_CATEGORY);
+        PreparedStatement stmtIdByName = connection.prepare(INSERT_CATEGORY_ID_BY_NAME);
+
+        dtos.forEach(dto -> {
+            executeAsync(stmt.bind(dto.getId(), dto.getCategoryName()));
+            executeAsync(stmtIdByName.bind(dto.getCategoryName(), dto.getId()));
+        });
+
+        return extractIds(dtos);
     }
 
     public List<UUID> insertInChunks(List<CategoryDTO> dtos, int chunkSize) {
-        int total = dtos.size();
         List<UUID> ids = new ArrayList<>();
-        for (int i = 0; i < total; i += chunkSize) {
-            int end = Math.min(i + chunkSize, total);
-            List<CategoryDTO> chunk = dtos.subList(i, end);
+        for (int i = 0; i < dtos.size(); i += chunkSize) {
+            List<CategoryDTO> chunk = dtos.subList(i, Math.min(i + chunkSize, dtos.size()));
             ids.addAll(insertBatch(chunk));
         }
         return ids;
     }
 
-    private List<UUID> retrieveIds(List<CategoryDTO> dtos) {
+    private void executeAsync(BoundStatement boundStatement) {
+        connection.executeAsync(boundStatement);
+    }
+
+    private List<UUID> extractIds(List<CategoryDTO> dtos) {
         List<UUID> ids = new ArrayList<>();
-        for (CategoryDTO dto : dtos) {
-            ids.add(dto.getId());
-        }
+        dtos.forEach(dto -> ids.add(dto.getId()));
         return ids;
     }
 
     public Optional<CategoryDTO> findByName(String name) {
-        log.info("Find category by name '{}'", name);
-
-        String cql = "SELECT category_id FROM \"practical5Keyspace\".categories_id_by_name WHERE category_name = ?";
+        log.info("Finding category by name '{}'.", name);
 
         try {
-            PreparedStatement statement = connection.prepare(cql);
+            PreparedStatement statement = connection.prepare(SELECT_CATEGORY_BY_NAME);
             BoundStatement bind = statement.bind(name);
             ResultSet resultSet = connection.execute(bind);
 
@@ -70,16 +69,15 @@ public class CategoryDAO {
                 Row row = resultSet.one();
                 UUID categoryId = row.getUuid("category_id");
 
-                log.info("Category '{}' found with ID '{}'", name, categoryId);
+                log.info("Category '{}' found with ID '{}'.", name, categoryId);
                 return Optional.of(new CategoryDTO(categoryId, name));
             }
 
-            log.warn("Category '{}' not found", name);
+            log.warn("Category '{}' not found.", name);
             return Optional.empty();
         } catch (Exception e) {
-            log.error("An error occurred while finding category '{}': {}", name, e.getMessage());
+            log.error("Error occurred while finding category '{}': {}", name, e.getMessage(), e);
             throw new RuntimeException("Failed to find category by name", e);
         }
     }
-
 }

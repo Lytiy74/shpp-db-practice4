@@ -13,6 +13,7 @@ import java.util.UUID;
 
 public class ProductDAO {
     private static final Logger log = LoggerFactory.getLogger(ProductDAO.class);
+    private static final String INSERT_PRODUCT = "INSERT INTO \"practical5Keyspace\".products (product_id, product_name, category_id, product_price) VALUES (?,?,?,?)";
 
     private final CqlSession connection;
 
@@ -20,32 +21,38 @@ public class ProductDAO {
         this.connection = connection;
     }
 
-    public List<UUID> insertBatch(List<ProductDTO> dtos) {
-        String cql = "INSERT INTO \"practical5Keyspace\".products (product_id, product_name, category_id, product_price) VALUES (?,?,?,?)";
-        PreparedStatement stmt = connection.prepare(cql);
-        for (ProductDTO dto : dtos) {
-            BoundStatement bind = stmt.bind(dto.getId(), dto.getName(), dto.getCategoryId(), dto.getPrice());
-            connection.executeAsync(bind);
-        }
-        return retrieveIds(dtos);
+    public List<UUID> insertBatch(List<ProductDTO> products) {
+        log.info("Inserting batch of {} products.", products.size());
+
+        PreparedStatement stmt = connection.prepare(INSERT_PRODUCT);
+        products.forEach(product -> executeAsync(stmt.bind(
+                product.getId(),
+                product.getName(),
+                product.getCategoryId(),
+                product.getPrice()
+        )));
+
+        return extractIds(products);
     }
 
-    public List<UUID> insertInChunks(List<ProductDTO> dtos, int chunkSize) {
-        int total = dtos.size();
+    public List<UUID> insertInChunks(List<ProductDTO> products, int chunkSize) {
+        log.info("Inserting products in chunks of size {}.", chunkSize);
+
         List<UUID> ids = new ArrayList<>();
-        for (int i = 0; i < total; i += chunkSize) {
-            int end = Math.min(i + chunkSize, total);
-            List<ProductDTO> chunk = dtos.subList(i, end);
+        for (int i = 0; i < products.size(); i += chunkSize) {
+            List<ProductDTO> chunk = products.subList(i, Math.min(i + chunkSize, products.size()));
             ids.addAll(insertBatch(chunk));
         }
         return ids;
     }
 
-    private List<UUID> retrieveIds(List<ProductDTO> dtos) {
+    private void executeAsync(BoundStatement boundStatement) {
+        connection.executeAsync(boundStatement);
+    }
+
+    private List<UUID> extractIds(List<ProductDTO> products) {
         List<UUID> ids = new ArrayList<>();
-        for (ProductDTO dto : dtos) {
-            ids.add(dto.getId());
-        }
+        products.forEach(product -> ids.add(product.getId()));
         return ids;
     }
 }

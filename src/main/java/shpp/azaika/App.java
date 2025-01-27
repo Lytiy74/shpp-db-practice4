@@ -5,20 +5,13 @@ import jakarta.validation.Validation;
 import org.apache.commons.lang3.time.StopWatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import shpp.azaika.dao.CategoryDAO;
-import shpp.azaika.dao.ProductDAO;
-import shpp.azaika.dao.ShopByCategoryDAO;
-import shpp.azaika.dao.StoreDAO;
+import shpp.azaika.dao.*;
 import shpp.azaika.dto.CategoryDTO;
 import shpp.azaika.dto.ProductDTO;
 import shpp.azaika.dto.StoreDTO;
-import shpp.azaika.util.DTOFaker;
-import shpp.azaika.util.DTOGenerator;
-import shpp.azaika.util.SchemaManager;
-import shpp.azaika.util.StockGenerator;
+import shpp.azaika.util.*;
 
 import java.io.IOException;
-import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -28,38 +21,36 @@ import java.util.concurrent.Future;
 public class App {
     private static final Logger log = LoggerFactory.getLogger(App.class);
     private static final int CHUNK_SIZE = 3000;
+    private static final int THREAD_POOL_SIZE = 1;
 
-    public static void main(String[] args) throws IOException, SQLException, ExecutionException, InterruptedException {
+    public static void main(String[] args) throws IOException, ExecutionException, InterruptedException {
         log.info("Starting application...");
-        SchemaManager.dropAndCreateTables();
-        Thread.sleep(30000);
+        initializeSchema();
+
         StopWatch stopWatch = new StopWatch();
         stopWatch.start();
 
         String productType = getProductTypeFromArgs(args);
         Properties generationProperties = loadGenerationProperties();
+        DTOGenerator dtoGenerator = createDTOGenerator();
 
-        DTOGenerator dtoGenerator = new DTOGenerator(new DTOFaker(), new Random(), Validation.buildDefaultValidatorFactory().getValidator());
+        try (ExecutorService executorService = Executors.newFixedThreadPool(THREAD_POOL_SIZE)) {
+            List<UUID> storeIds = generateAndInsertEntities("stores", generationProperties, dtoGenerator::generateAndValidateStores, new StoreDAOFactory(), executorService);
+            List<UUID> categoryIds = generateAndInsertEntities("categories", generationProperties, dtoGenerator::generateAndValidateCategories, new CategoryDAOFactory(), executorService);
+            generateAndInsertProducts(dtoGenerator, generationProperties, categoryIds, executorService);
+            generateAndInsertStocks(categoryIds, storeIds, generationProperties);
 
+            String storeWithMostProducts = getStoreWithMostProductsOfType(productType);
+            log.info(storeWithMostProducts);
+        }
 
-        ExecutorService executorService = Executors.newFixedThreadPool(4);
-
-        List<UUID> storeIds = generateAndInsertStores(dtoGenerator, generationProperties, executorService);
-        List<UUID> categoriesIds = generateAndInsertCategories(dtoGenerator, generationProperties, executorService);
-        List<UUID> productIds = generateAndInsertProducts(dtoGenerator, generationProperties, categoriesIds, executorService);
-        generateAndInsertToShopByCategory(categoriesIds, storeIds, generationProperties);
-
-        String storeWithMostProductsOfType = getStoreWithMostProductsOfType(productType);
-        log.info(storeWithMostProductsOfType);
+        stopWatch.stop();
+        log.info("Application finished in {} ms", stopWatch.getTime());
     }
 
-    private static void generateAndInsertToShopByCategory(List<UUID> categoriesIds, List<UUID> storeIds, Properties generationProperties) {
-        StopWatch stopWatch = new StopWatch();
-        stopWatch.start();
-        StockGenerator stockGenerator = new StockGenerator(categoriesIds, storeIds);
-        stockGenerator.generateAndInsertStocks(Integer.parseInt(generationProperties.getProperty("stock.quantity")), CHUNK_SIZE, 3);
-        stopWatch.stop();
-        log.info("Inserted stocks in DB in {} ms", stopWatch.getDuration().toMillis());
+    private static void initializeSchema() throws InterruptedException {
+        SchemaManager.dropAndCreateTables();
+        Thread.sleep(60000);
     }
 
     private static String getProductTypeFromArgs(String[] args) {
@@ -67,95 +58,91 @@ public class App {
     }
 
     private static Properties loadGenerationProperties() throws IOException {
-        Properties generationProperties = new Properties();
-        generationProperties.load(Thread.currentThread().getContextClassLoader().getResourceAsStream("generation.properties"));
-        return generationProperties;
+        Properties properties = new Properties();
+        properties.load(Thread.currentThread().getContextClassLoader().getResourceAsStream("generation.properties"));
+        return properties;
     }
 
-    private static List<UUID> generateAndInsertStores(DTOGenerator dtoGenerator, Properties generationProperties, ExecutorService executorService) throws InterruptedException, ExecutionException {
+    private static DTOGenerator createDTOGenerator() {
+        return new DTOGenerator(new DTOFaker(), new Random(), Validation.buildDefaultValidatorFactory().getValidator());
+    }
+
+    private static <T> List<UUID> generateAndInsertEntities(String entityName, Properties properties, EntityGenerator<T> generator, DAOFactory<T> daoFactory, ExecutorService executorService) throws ExecutionException, InterruptedException {
         StopWatch stopWatch = new StopWatch();
         stopWatch.start();
-        List<StoreDTO> storeDTOS = dtoGenerator.generateAndValidateStores(Integer.parseInt(generationProperties.getProperty("stores.quantity")));
-        stopWatch.stop();
-        log.info("Generated stores in {} ms", stopWatch.getDuration().toMillis());
 
-        List<UUID> ids;
-        try (CqlSession connection = CqlSession.builder().build()) {
-            StoreDAO storeDAO = new StoreDAO(connection);
+        int quantity = Integer.parseInt(properties.getProperty(entityName + ".quantity"));
+        List<T> entities = generator.generate(quantity);
+        stopWatch.stop();
+        log.info("Generated {} in {} ms", entityName, stopWatch.getTime());
+
+        try (CqlSession session = CqlSession.builder().build()) {
             stopWatch.reset();
             stopWatch.start();
-            Future<List<UUID>> storeInsertTask = executorService.submit(() -> storeDAO.insertInChunks(storeDTOS, CHUNK_SIZE));
-            ids = storeInsertTask.get();
-            stopWatch.stop();
-            log.info("Inserted stores in DB in {} ms", stopWatch.getDuration().toMillis());
-        }
 
-        return ids;
+            Future<List<UUID>> task = executorService.submit(() -> daoFactory.create(session).insertInChunks(entities, CHUNK_SIZE));
+            List<UUID> ids = task.get();
+
+            stopWatch.stop();
+            log.info("Inserted {} in DB in {} ms", entityName, stopWatch.getTime());
+            return ids;
+        }
     }
 
-    private static List<UUID> generateAndInsertCategories(DTOGenerator dtoGenerator, Properties generationProperties, ExecutorService executorService) throws InterruptedException, ExecutionException {
+    private static void generateAndInsertProducts(DTOGenerator dtoGenerator, Properties properties, List<UUID> categoryIds, ExecutorService executorService) throws ExecutionException, InterruptedException {
         StopWatch stopWatch = new StopWatch();
         stopWatch.start();
-        List<CategoryDTO> categoryDTOS = dtoGenerator.generateAndValidateCategories(Integer.parseInt(generationProperties.getProperty("categories.quantity")));
-        stopWatch.stop();
-        log.info("Generated categories in {} ms", stopWatch.getDuration().toMillis());
 
-        List<UUID> ids;
-        try (CqlSession connection = CqlSession.builder().build()) {
-            CategoryDAO categoryDAO = new CategoryDAO(connection);
+        int quantity = Integer.parseInt(properties.getProperty("products.quantity"));
+        List<ProductDTO> products = dtoGenerator.generateAndValidateProducts(quantity, categoryIds);
+        stopWatch.stop();
+        log.info("Generated products in {} ms", stopWatch.getTime());
+
+        try (CqlSession session = CqlSession.builder().build()) {
             stopWatch.reset();
             stopWatch.start();
-            Future<List<UUID>> categoryInsertTask = executorService.submit(() -> categoryDAO.insertInChunks(categoryDTOS, CHUNK_SIZE));
-            ids = categoryInsertTask.get();
-            stopWatch.stop();
-            log.info("Inserted categories in DB in {} ms", stopWatch.getDuration().toMillis());
-        }
 
-        return ids;
+            ProductDAO productDAO = new ProductDAO(session);
+            Future<List<UUID>> task = executorService.submit(() -> productDAO.insertInChunks(products, CHUNK_SIZE));
+            task.get();
+
+            stopWatch.stop();
+            log.info("Inserted products in DB in {} ms", stopWatch.getTime());
+        }
     }
 
-    private static List<UUID> generateAndInsertProducts(DTOGenerator dtoGenerator, Properties generationProperties, List<UUID> categoryIds, ExecutorService executorService) throws InterruptedException, ExecutionException {
+    private static void generateAndInsertStocks(List<UUID> categoryIds, List<UUID> storeIds, Properties properties) {
         StopWatch stopWatch = new StopWatch();
         stopWatch.start();
-        List<ProductDTO> productDTOS = dtoGenerator.generateAndValidateProducts(Integer.parseInt(generationProperties.getProperty("products.quantity")), categoryIds);
+
+        int quantity = Integer.parseInt(properties.getProperty("stock.quantity"));
+        StockGenerator stockGenerator = new StockGenerator(categoryIds, storeIds);
+        stockGenerator.generateAndInsertStocks(quantity, CHUNK_SIZE, THREAD_POOL_SIZE);
+
         stopWatch.stop();
-        log.info("Generated products in {} ms", stopWatch.getDuration().toMillis());
-
-        List<UUID> ids;
-        try (CqlSession connection = CqlSession.builder().build()) {
-            ProductDAO productDAO = new ProductDAO(connection);
-            stopWatch.reset();
-            stopWatch.start();
-            Future<List<UUID>> productInsertTask = executorService.submit(() -> productDAO.insertInChunks(productDTOS, CHUNK_SIZE));
-            ids = productInsertTask.get();
-            stopWatch.stop();
-            log.info("Inserted products in DB in {} ms", stopWatch.getDuration().toMillis());
-        }
-
-        return ids;
+        log.info("Inserted stocks in DB in {} ms", stopWatch.getTime());
     }
-
 
     private static String getStoreWithMostProductsOfType(String productType) {
-        try (CqlSession connection = CqlSession.builder().build()) {
-            CategoryDAO categoryDAO = new CategoryDAO(connection);
+        try (CqlSession session = CqlSession.builder().build()) {
+            CategoryDAO categoryDAO = new CategoryDAO(session);
             Optional<CategoryDTO> categoryOptional = categoryDAO.findByName(productType);
+
             if (categoryOptional.isEmpty()) {
-                log.error("Category not found.");
+                log.error("Category not found: {}", productType);
                 return "";
             }
 
-            CategoryDTO category = categoryOptional.get();
+            UUID categoryId = categoryOptional.get().getId();
+            ShopByCategoryDAO shopByCategoryDAO = new ShopByCategoryDAO(session);
+            Optional<StoreDTO> storeOptional = shopByCategoryDAO.findStoreWithMostProductsByCategory(categoryId);
 
-            ShopByCategoryDAO shopByCategoryDAO = new ShopByCategoryDAO(connection);
-            Optional<StoreDTO> storeOptional = shopByCategoryDAO.findStoreWithMostProductsByCategory(category.getId());
             if (storeOptional.isEmpty()) {
-                log.error("No store found with products of type {}.", productType);
+                log.error("No store found with products of type: {}", productType);
                 return "";
             }
-            StoreDTO storeWithMostProducts = storeOptional.get();
 
-            return storeWithMostProducts.toString();
+            return storeOptional.get().toString();
         }
     }
 

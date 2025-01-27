@@ -19,6 +19,13 @@ import java.util.UUID;
 public class ShopByCategoryDAO {
     private static final Logger log = LoggerFactory.getLogger(ShopByCategoryDAO.class);
 
+    private static final String INSERT_SHOP_BY_CATEGORY =
+            "INSERT INTO \"practical5Keyspace\".shop_by_category (category_id, shop_id, category_quantity) VALUES (?,?,?)";
+    private static final String SELECT_SHOP_ID_BY_CATEGORY =
+            "SELECT shop_id, category_quantity FROM \"practical5Keyspace\".shop_by_category WHERE category_id = ? LIMIT 1";
+    private static final String SELECT_SHOP_ADDRESS =
+            "SELECT shop_address FROM \"practical5Keyspace\".shops WHERE shop_id = ?";
+
     private final CqlSession connection;
 
     public ShopByCategoryDAO(CqlSession connection) {
@@ -26,63 +33,75 @@ public class ShopByCategoryDAO {
     }
 
     public List<Pair<UUID, UUID>> insertBatch(List<ShopByCategoryDTO> dtos) {
-        String cqlToCategories = "INSERT INTO \"practical5Keyspace\".shop_by_category (category_id, shop_id, category_quantity) VALUES (?,?,?)";
-        PreparedStatement stmt = connection.prepare(cqlToCategories);
-        for (ShopByCategoryDTO dto : dtos) {
-            BoundStatement bind = stmt.bind(dto.getCategoryId(), dto.getShopId(), dto.getQuantity());
-            connection.executeAsync(bind);
-        }
-        return retrieveIds(dtos);
+        log.info("Inserting batch of {} shop-by-category entries.", dtos.size());
+
+        PreparedStatement stmt = connection.prepare(INSERT_SHOP_BY_CATEGORY);
+        dtos.forEach(dto -> executeAsync(stmt.bind(dto.getCategoryId(), dto.getShopId(), dto.getQuantity())));
+
+        return extractIds(dtos);
     }
 
     public List<Pair<UUID, UUID>> insertInChunks(List<ShopByCategoryDTO> dtos, int chunkSize) {
-        int total = dtos.size();
+        log.info("Inserting shop-by-category entries in chunks of size {}.", chunkSize);
+
         List<Pair<UUID, UUID>> ids = new ArrayList<>();
-        for (int i = 0; i < total; i += chunkSize) {
-            int end = Math.min(i + chunkSize, total);
-            List<ShopByCategoryDTO> chunk = dtos.subList(i, end);
+        for (int i = 0; i < dtos.size(); i += chunkSize) {
+            List<ShopByCategoryDTO> chunk = dtos.subList(i, Math.min(i + chunkSize, dtos.size()));
             ids.addAll(insertBatch(chunk));
         }
         return ids;
     }
 
-    private List<Pair<UUID, UUID>> retrieveIds(List<ShopByCategoryDTO> dtos) {
-        List<Pair<UUID, UUID>> ids = new ArrayList<>();
-        for (ShopByCategoryDTO dto : dtos) {
-            ids.add(Pair.of(dto.getCategoryId(), dto.getShopId()));
+    public Optional<StoreDTO> findStoreWithMostProductsByCategory(UUID categoryId) {
+        log.info("Finding store with most products for category ID '{}'.", categoryId);
+
+        try {
+            UUID shopId = executeQuery(SELECT_SHOP_ID_BY_CATEGORY, categoryId, "shop_id", UUID.class)
+                    .orElse(null);
+
+            if (shopId == null) {
+                log.warn("No shop found for category ID '{}'.", categoryId);
+                return Optional.empty();
+            }
+            String shopAddress = executeQuery(SELECT_SHOP_ADDRESS, shopId, "shop_address", String.class)
+                    .orElse(null);
+
+            if (shopAddress != null) {
+                log.info("Found shop with ID '{}' and address '{}'.", shopId, shopAddress);
+                return Optional.of(new StoreDTO(shopId, shopAddress));
+            }
+
+            log.warn("Shop address not found for shop ID '{}'.", shopId);
+            return Optional.empty();
+        } catch (Exception e) {
+            log.error("Error occurred while finding store: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to find store for category ID", e);
         }
-        return ids;
     }
 
-    public Optional<StoreDTO> findStoreWithMostProductsByCategory(UUID categoryId) {
-
-        String cqlToGetShopId = "SELECT shop_id FROM \"practical5Keyspace\".shop_by_category WHERE category_id = ?";
-        String cqlTOGetShopAddres = "SELECT shop_address FROM \"practical5Keyspace\".shops WHERE shop_id = ?";
-        Optional result;
+    private <T> Optional<T> executeQuery(String query, Object param, String columnName, Class<T> type) {
         try {
-            PreparedStatement stmtToGetShopId = connection.prepare(cqlToGetShopId);
-            BoundStatement bind = stmtToGetShopId.bind(categoryId);
+            PreparedStatement stmt = connection.prepare(query);
+            BoundStatement bind = stmt.bind(param);
             ResultSet resultSet = connection.execute(bind);
 
             if (resultSet.iterator().hasNext()) {
                 Row row = resultSet.one();
-                UUID shopId = row.getUuid("shop_id");
-
-                PreparedStatement stmtToGetShopAddress = connection.prepare(cqlTOGetShopAddres);
-                BoundStatement bind1 = stmtToGetShopAddress.bind(shopId);
-                ResultSet execute = connection.execute(bind1);
-                if (execute.iterator().hasNext()) {
-                    Row row1 = execute.one();
-                    String address = row1.getString("shop_address");
-                    return Optional.of(new StoreDTO(shopId, address));
-                }
-                log.info("Shop found with ID '{}'", shopId);
+                return Optional.ofNullable(row.get(columnName, type));
             }
-
-
-            return Optional.empty();
         } catch (Exception e) {
-            throw new RuntimeException("Failed to find category by name", e);
+            log.error("Error executing query '{}': {}", query, e.getMessage(), e);
         }
+        return Optional.empty();
+    }
+
+    private void executeAsync(BoundStatement boundStatement) {
+        connection.executeAsync(boundStatement);
+    }
+
+    private List<Pair<UUID, UUID>> extractIds(List<ShopByCategoryDTO> dtos) {
+        List<Pair<UUID, UUID>> ids = new ArrayList<>();
+        dtos.forEach(dto -> ids.add(Pair.of(dto.getCategoryId(), dto.getShopId())));
+        return ids;
     }
 }
